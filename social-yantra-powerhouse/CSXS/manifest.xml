@@ -2,7 +2,8 @@
 <ExtensionManifest ExtensionBundleId="com.socialyantra.powerhouse"
                    ExtensionBundleVersion="1.0.0"
                    ExtensionBundleName="Social Yantra Powerhouse Panel"
-                   Version="1.0.0"
+                   Version="9.0"
+                   xmlns="http://ns.adobe.com/cep/manifest"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
     <Extension Id="com.socialyantra.powerhouse.panel" Version="1.0.0"/>
@@ -26,9 +27,10 @@
           <ScriptPath>./jsx/social-yantra.jsx</ScriptPath>
           <CEFCommandLine>
             <Parameter>--enable-nodejs</Parameter>
-            <Parameter>--mix-contexts</Parameter>
+            <Parameter>--mixed-context</Parameter>
             <Parameter>--allow-file-access</Parameter>
             <Parameter>--allow-file-access-from-files</Parameter>
+            <Parameter>--enable-allow-file-access-from-files</Parameter>
           </CEFCommandLine>
         </Resources>
         <Lifecycle>
