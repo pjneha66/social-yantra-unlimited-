@@ -21,6 +21,17 @@ window.SY = (function () {
   SY.hasNode = !!nodeRequire;
   SY.require = function (m) { return nodeRequire ? nodeRequire(m) : null; };
 
+  // In a CEP mixed context `require` can be exposed through `cep_node` while
+  // `process` is not a browser global.  Resolve it through Node instead of
+  // assuming the global exists, so the panel does not fail on Windows while
+  // discovering external tools.
+  var nodeProcess = null;
+  if (SY.hasNode) {
+    try { nodeProcess = SY.require('process'); } catch (e2) { nodeProcess = null; }
+  }
+  SY.nodeProcess = nodeProcess;
+  SY.env = (nodeProcess && nodeProcess.env) ? nodeProcess.env : {};
+
   var nd = SY.hasNode ? SY.require('os') : null;
   SY.os = (nd && nd.platform && nd.platform().indexOf('win') === 0) ? 'win' : 'mac';
   SY.sep = SY.os === 'win' ? '\\' : '/';
@@ -127,11 +138,17 @@ window.SY = (function () {
       var raw = localStorage.getItem('sySettings');
       if (raw) {
         var s = JSON.parse(raw);
-        Object.keys(s).forEach(function (k) {
-          if (settings[k] && typeof settings[k] === 'object' && !Array.isArray(settings[k])) {
-            Object.keys(s[k]).forEach(function (k2) { settings[k][k2] = s[k][k2]; });
-          } else { settings[k] = s[k]; }
-        });
+        function isObject(v) { return v && typeof v === 'object' && !Array.isArray(v); }
+        function merge(target, saved) {
+          Object.keys(saved).forEach(function (k) {
+            // Ignore malformed persisted values for object-shaped settings.
+            // This preserves the defaults added by newer panel versions.
+            if (isObject(target[k])) {
+              if (isObject(saved[k])) { merge(target[k], saved[k]); }
+            } else { target[k] = saved[k]; }
+          });
+        }
+        if (isObject(s)) { merge(settings, s); }
       }
     } catch (e) { /* fresh */ }
     SY.settings = settings;
@@ -301,7 +318,7 @@ window.SY = (function () {
     var cp = SY.require('child_process');
     if (SY.settings.ffmpegPath && SY.exists(SY.settings.ffmpegPath)) { ffmpegCache = SY.settings.ffmpegPath; cb(ffmpegCache); return; }
     var candidates = SY.os === 'win'
-      ? ['ffmpeg', 'C:\\ffmpeg\\bin\\ffmpeg.exe', 'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe', process.env.USERPROFILE + '\\ffmpeg\\bin\\ffmpeg.exe']
+      ? ['ffmpeg', 'C:\\ffmpeg\\bin\\ffmpeg.exe', 'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe'].concat(SY.env.USERPROFILE ? [SY.env.USERPROFILE + '\\ffmpeg\\bin\\ffmpeg.exe'] : [])
       : ['ffmpeg', '/usr/local/bin/ffmpeg', '/opt/homebrew/bin/ffmpeg', '/usr/bin/ffmpeg'];
     var i = 0;
     (function next() {
