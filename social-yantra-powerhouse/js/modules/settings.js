@@ -20,6 +20,29 @@ window.SettingsMod = (function (SY) {
       SY.settings.ffmpegPath = this.value; SY.saveSettings(); testFfmpeg();
     });
     document.getElementById('stFfmpegTest').addEventListener('click', testFfmpeg);
+    var exp = document.getElementById('stExportDir');
+    exp.value = SY.settings.exportDir || '';
+    exp.addEventListener('change', function () {
+      SY.settings.exportDir = this.value.trim();
+      SY.saveSettings();
+      refresh();
+      SY.toast('Exports will be written to ' + (SY.settings.exportDir || 'the default folder'), 'ok');
+    });
+    document.getElementById('stExportBrowse').addEventListener('click', function () {
+      SY.pickFolder(function (f) {
+        if (!f) { return; }
+        SY.settings.exportDir = f;
+        SY.saveSettings();
+        exp.value = f;
+        refresh();
+        SY.toast('Export folder set', 'ok');
+      });
+    });
+    document.getElementById('stExportOpen').addEventListener('click', function () {
+      if (!SY.hasNode) { SY.toast('Demo mode', 'warn'); return; }
+      SY.mkdirp(SY.exportDir());
+      SY.reveal(SY.exportDir());
+    });
     document.getElementById('stOpenDocs').addEventListener('click', function () {
       if (SY.hasNode) { SY.mkdirp(SY.paths.root); SY.reveal(SY.paths.root); } else { SY.toast('Demo mode', 'warn'); }
     });
@@ -62,17 +85,30 @@ window.SettingsMod = (function (SY) {
       kv('OS', SY.os === 'win' ? 'Windows' : 'macOS') +
       kv('Panel folder', extPath) +
       kv('Whisper mode', SY.settings.whisperMode) +
-      kv('Panel version', '1.0.0');
+      kv('Transcription language', window.SYLang ? SYLang.current().label : 'auto') +
+      kv('Translate to English', SY.settings.whisper && SY.settings.whisper.translate ? 'yes' : 'no') +
+      kv('FFmpeg', ffmpegTagText()) +
+      kv('Panel version', '1.1.0');
 
     var paths = document.getElementById('stPaths');
     paths.innerHTML =
       kv('Data root', SY.paths.root || '(demo)') +
+      kv('Whisper models', SY.settings.whisperModelDir || SY.paths.models || '(demo)') +
+      kv('Exports', SY.exportDir() || '(demo)') +
       kv('Nest library', SY.settings.nestRoot || SY.paths.nests || '(demo)') +
       kv('Freeze frames', SY.paths.freeze || '(demo)') +
-      kv('Whisper models', SY.settings.whisperModelDir || SY.paths.models || '(demo)') +
-      kv('Assets library', SY.settings.assetsRoot || SY.paths.library || '(demo)');
+      kv('Assets library', SY.settings.assetsRoot || SY.paths.library || '(demo)') +
+      kv('Temp / wav', SY.paths.temp || '(demo)');
+
+    var expEl = document.getElementById('stExportDir');
+    if (expEl && document.activeElement !== expEl) { expEl.value = SY.settings.exportDir || ''; }
 
     function kv(k, v) { return '<span class="k">' + SY.esc(k) + '</span><span class="v">' + SY.esc(v) + '</span>'; }
+  }
+
+  function ffmpegTagText() {
+    var tag = document.getElementById('stFfmpegTag');
+    return (tag && tag.textContent) ? tag.textContent : (SY.settings.ffmpegPath || 'auto-detect');
   }
 
   return { init: init, refresh: refresh };

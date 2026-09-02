@@ -35,9 +35,35 @@ window.SYUI = (function (SY) {
       chip.classList.toggle('on');
     });
 
+    // tool search / jump box
+    var search = document.getElementById('navSearch');
+    if (search) {
+      search.addEventListener('input', function () {
+        var q = search.value.toLowerCase().trim();
+        var btns2 = document.querySelectorAll('.nav-btn');
+        for (var i = 0; i < btns2.length; i++) {
+          var hay = ((btns2[i].getAttribute('data-words') || '') + ' ' + (btns2[i].getAttribute('title') || '')).toLowerCase();
+          btns2[i].classList.toggle('dim', !!q && hay.indexOf(q) === -1);
+        }
+        var groups = document.querySelectorAll('.nav-group');
+        for (var g = 0; g < groups.length; g++) {
+          groups[g].classList.toggle('dim', !!q && groups[g].textContent.toLowerCase().indexOf(q) === -1);
+        }
+        if (q) {
+          var first = document.querySelector('.nav-btn:not(.dim)');
+          if (first && first.classList.contains('only-match')) { goto(first.getAttribute('data-view')); }
+        }
+      });
+      search.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.keyCode !== 13) { return; }
+        var first = document.querySelector('.nav-btn:not(.dim)');
+        if (first) { goto(first.getAttribute('data-view')); search.blur(); }
+      });
+    }
+
     // module inits
-    ['SilenceMod', 'FillerMod', 'FlowMod', 'WordPopMod', 'NestMod', 'AssetsMod',
-     'TrueDupMod', 'ToolsMod', 'ModelsMod', 'SettingsMod'].forEach(function (name) {
+    ['SilenceMod', 'FillerMod', 'ChaptersMod', 'DuckMod', 'BeatMod', 'FlowMod', 'WordPopMod',
+     'NestMod', 'AssetsMod', 'TrueDupMod', 'ToolsMod', 'ModelsMod', 'SettingsMod'].forEach(function (name) {
       if (window[name] && typeof window[name].init === 'function') {
         try { window[name].init(); } catch (e) { SY.log(name + ' init failed: ' + e.message, 'err'); }
       }
@@ -54,10 +80,22 @@ window.SYUI = (function (SY) {
     for (var i = 0; i < btns.length; i++) { btns[i].classList.toggle('active', btns[i].getAttribute('data-view') === view); }
     var views = document.querySelectorAll('.view');
     for (var v = 0; v < views.length; v++) { views[v].classList.toggle('active', views[v].id === 'view-' + view); }
-    if (view === 'settings') { SettingsMod.refresh(); }
-    if (view === 'models') { ModelsMod.refresh(); }
-    if (view === 'nest') { NestMod.refreshList(); }
-    if (view === 'assets') { AssetsMod.refresh(); }
+    // highlight the group this tab belongs to
+    var activeBtn = document.querySelector('.nav-btn[data-view="' + view + '"]');
+    var group = activeBtn ? activeBtn.getAttribute('data-group') : '';
+    var groups = document.querySelectorAll('.nav-group');
+    for (var g = 0; g < groups.length; g++) {
+      groups[g].classList.toggle('on', groups[g].getAttribute('data-group') === group);
+    }
+    if (view === 'settings' && window.SettingsMod) { SettingsMod.refresh(); }
+    if (view === 'models' && window.ModelsMod) { ModelsMod.refresh(); }
+    if (view === 'nest' && window.NestMod) { NestMod.refreshList(); }
+    if (view === 'assets' && window.AssetsMod) { AssetsMod.refresh(); }
+    if (view === 'duck' && window.DuckMod) { DuckMod.refresh(); }
+    if (view === 'beat' && window.BeatMod) { BeatMod.refresh(); }
+    if (view === 'chapters' && window.ChaptersMod) { ChaptersMod.refresh(); }
+    SY.settings.nav.lastView = view;
+    try { SY.saveSettings(); } catch (e) { /* noop */ }
   }
 
   function connect() {

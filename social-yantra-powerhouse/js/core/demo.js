@@ -69,6 +69,35 @@
         out.data = { video: '', thumb: '/demo/thumb.png', projectCopy: '', meta: '/demo/meta.json', exportMethod: 'demo', warnings: ['demo: AME not running'] };
       } else if (/SY\.evalJson\("nestRestore"/.test(script)) {
         out.data = { placedAt: '7.200s', item: 'DEMO_NEST' };
+      } else if (/SY\.evalJson\("getAudioTracks"/.test(script)) {
+        out.data = {
+          tracks: [
+            { index: 0, label: 'A1', name: 'A1', locked: false, clips: [
+              { name: 'podcast_ep12.wav', trackType: 'audio', trackIndex: 0, start: 0, end: 41.5, inPoint: 0, mediaPath: '/demo/podcast_ep12.wav', selected: false } ] },
+            { index: 1, label: 'A2', name: 'A2', locked: false, clips: [
+              { name: 'music_bed.mp3', trackType: 'audio', trackIndex: 1, start: 0, end: 41.5, inPoint: 0, mediaPath: '/demo/music_bed.mp3', selected: false } ] },
+            { index: 2, label: 'A3', name: 'A3', locked: false, clips: [
+              { name: 'sfx_whoosh.wav', trackType: 'audio', trackIndex: 2, start: 12.5, end: 13.4, inPoint: 0, mediaPath: '/demo/sfx_whoosh.wav', selected: false } ] }
+          ],
+          selection: [],
+          seq: { name: 'DEMO — Podcast_Ep12', fps: 25, duration: 41.5 }
+        };
+      } else if (/SY\.evalJson\("duckTrack"/.test(script)) {
+        if (/"mode":"markers"/.test(script)) { out.data = { markers: 6, mode: 'markers', note: 'Preview markers placed at each duck start.' }; }
+        else if (/"mode":"clear"/.test(script)) { out.data = { clips: ['"music_bed.mp3": ducking cleared'], keys: 1, mode: 'clear', tracks: [1], baseDb: 0, note: '' }; }
+        else { out.data = { clips: ['"music_bed.mp3" (A2): 26 keys · linear'], keys: 26, mode: 'keys', tracks: [1], baseDb: 0, note: '' }; }
+      } else if (/SY\.evalJson\("razorPoints"/.test(script)) {
+        var n = (script.match(/"t":/g) || []).length || 10;
+        if (/"markers":true/.test(script)) { out.data = { markers: n, cuts: n, note: 'Beat markers placed (no cuts).' }; }
+        else { out.data = { cuts: n, points: n, note: '' }; }
+      } else if (/SY\.evalJson\("getMarkers"/.test(script)) {
+        out.data = [
+          { at: 0, until: 12.5, name: 'Intro', comments: '', type: 'Chapter', guid: 'g1' },
+          { at: 12.5, until: 27.2, name: 'Main topic', comments: '', type: 'Chapter', guid: 'g2' },
+          { at: 27.2, until: 41.5, name: 'Wrap up', comments: '', type: 'Chapter', guid: 'g3' }
+        ];
+      } else if (/SY\.evalJson\("addMarkers"/.test(script)) {
+        out.data = { added: 3, total: 3 };
       } else if (/SY\.evalJson\("getClips"/.test(script)) {
         out.data = [
           { name: 'interview_A.mp4', trackType: 'video', trackIndex: 0, start: 0, end: 12.5, inPoint: 0, outPoint: 12.5, mediaType: 'Video', selected: false, mediaPath: '/demo/interview_A.mp4', isAdjustment: false },
@@ -108,4 +137,41 @@
     }, 1400);
   });
   window.SYWhisper && (window.SYWhisper.test = function (cb) { setTimeout(function () { cb({ ok: true, note: 'demo engine' }); }, 400); });
+
+  // Demo ducking: same fake speech regions as the VAD, complemented
+  window.SYAudio && (window.SYAudio.speechIntervals = function (clips, opts, cb) {
+    setTimeout(function () {
+      var iv = [[0, 3.42], [5.1, 12.8], [15.95, 21.3], [22.05, 30.1], [33.8, 41.5]];
+      cb(null, { speech: iv, coverage: [[0, 41.5]], media: 1, failures: [], analyses: {} });
+    }, 1100);
+  });
+
+  // Demo beat detection: a plausible 120 BPM grid with an envelope curve
+  window.SYBeat && (window.SYBeat.detectMedia = function (mediaPath, opts, cb) {
+    setTimeout(function () {
+      var bpm = 120, period = 60 / bpm;
+      var beats = [], env = [], low = [];
+      for (var t = 0; t < 41.5; t += period) { beats.push(Math.round(t * 1000) / 1000); }
+      for (var f = 0; f < 41.5 / 0.032; f++) {
+        var ph = (f * 0.032) % period;
+        var v = Math.max(0, 1 - ph / 0.09);
+        env.push(v + 0.05 * Math.random());
+        low.push((f % 8 === 0) ? 1 : 0.1);
+      }
+      var downbeats = beats.filter(function (b, i) { return i % 4 === 0; });
+      cb(null, {
+        bpm: bpm, periodSec: period, confidence: 0.93, beats: beats, downbeats: downbeats,
+        onsets: beats.map(function (b) { return { t: b, s: 0.9 }; }),
+        envelope: env, low: low, hopSec: 0.032, offsetSec: 0.032, frames: env.length,
+        dur: 41.5, beatCount: beats.length, onBeatRatio: 2.4, barPhase: 0, beatsPerBar: 4,
+        tempoScores: [{ bpm: 120, score: 0.82 }, { bpm: 60, score: 0.41 }, { bpm: 240, score: 0.22 }],
+        note: ''
+      });
+    }, 1500);
+  });
+
+  // Demo downloader: no network, but keep the UI flow explorable
+  window.SYDownloader && (window.SYDownloader.checkDir = function (dir, cb) {
+    cb({ ok: true, dir: dir, created: false, writable: true, freeBytes: 0, models: 2 });
+  });
 })(window.SY);

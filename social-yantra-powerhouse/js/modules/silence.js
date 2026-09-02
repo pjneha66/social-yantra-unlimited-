@@ -88,6 +88,7 @@ window.SilenceMod = (function (SY) {
         gaps = (res.gaps || []).map(function (g) {
           return { start: g[0], end: g[1], selected: true };
         }).filter(function (g) { return g.end - g.start >= +val('silMinCut'); });
+        SY.lastSilenceGaps = res.gaps || [];   // shared with the Chapters tab
         render();
         var total = gaps.reduce(function (a, g) { return a + (g.end - g.start); }, 0);
         els.stats.innerHTML = '<b>' + gaps.length + '</b> gaps · <b>' + total.toFixed(2) + 's</b> of silence · runtime saved ≈ <b>' +
@@ -153,6 +154,7 @@ window.SilenceMod = (function (SY) {
       SY.log('silence cut: ' + JSON.stringify(d), 'ok');
       if (!document.getElementById('silPreviewOnly').checked) {
         gaps = []; render(); els.cut.disabled = true; els.clear.disabled = true;
+        SY.lastSilenceGaps = null;   // timeline moved — cached gaps are stale
         SYUI.connect();
       }
     });

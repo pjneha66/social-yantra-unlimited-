@@ -314,3 +314,54 @@ body.demo .demo-banner { display: block; }
 .flex1 { flex: 1; }
 a { color: var(--accent-2); text-decoration: none; }
 a:hover { text-decoration: underline; }
+
+/* ==========================================================================
+   v1.1 — organised sidebar (groups + search), new Audio/Chapters tabs
+   ========================================================================== */
+#side { width: 62px; flex: 0 0 62px; overflow-y: auto; overflow-x: hidden; padding-bottom: 12px; }
+#side::-webkit-scrollbar { width: 5px; }
+.nav-search {
+  display: flex; align-items: center; gap: 4px; margin: 0 6px 8px;
+  background: var(--bg-2); border: 1px solid var(--stroke); border-radius: 8px;
+  padding: 3px 5px; color: var(--txt-2);
+}
+.nav-search span { font-size: 10px; line-height: 1; }
+.nav-search input {
+  background: transparent; border: 0; outline: none; color: var(--txt-0);
+  font-size: 10px; width: 100%; min-width: 0; padding: 0;
+}
+.nav-search input::placeholder { color: var(--txt-2); }
+.nav-group {
+  width: 100%; text-align: center; font-size: 7.5px; letter-spacing: .9px;
+  text-transform: uppercase; color: var(--txt-2); padding: 8px 0 3px;
+  border-top: 1px solid var(--stroke); margin-top: 6px; opacity: .75;
+}
+.nav-group:first-of-type { border-top: 0; margin-top: 0; }
+.nav-group.on { color: var(--accent-2); opacity: 1; }
+.nav-group.dim, .nav-btn.dim { opacity: .18; }
+.nav-btn .tip { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 10px; }
+.nav-btn .tip b { font-weight: 700; font-size: 11px; }
+.nav-btn .tip i { font-style: normal; font-size: 9.5px; color: #9aa4b8; }
+
+/* pickable list rows (audio tracks / clips) */
+.list-row.pick { cursor: pointer; }
+.list-row.pick:hover { background: var(--bg-3); }
+.list-row.pick.on { background: rgba(124,92,255,.16); box-shadow: inset 2px 0 0 var(--accent); }
+
+/* canvases */
+#dkCanvasWrap, #btCanvasWrap {
+  border: 1px solid var(--stroke); border-radius: 9px; background: var(--bg-1);
+  overflow: hidden; padding: 0;
+}
+#dkCanvas, #btCanvas { display: block; width: 100%; }
+
+/* big stat tiles */
+.bigstat {
+  flex: 1; min-width: 62px; text-align: center; background: var(--bg-1);
+  border: 1px solid var(--stroke); border-radius: 9px; padding: 7px 4px;
+}
+.bigstat b { display: block; font-size: 17px; font-weight: 800; color: var(--txt-0); line-height: 1.2; }
+.bigstat span { font-size: 9px; text-transform: uppercase; letter-spacing: .6px; color: var(--txt-2); }
+
+/* chapter / cut-point chips wrap */
+#btCutList .list-row { display: block; }

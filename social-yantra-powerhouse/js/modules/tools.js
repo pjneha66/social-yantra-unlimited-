@@ -24,6 +24,11 @@ window.ToolsMod = (function (SY) {
 
     /* QC checker */
     document.getElementById('tlQcGo').addEventListener('click', qc);
+    document.getElementById('tlQcToChapters').addEventListener('click', function () {
+      SYUI.goto('chapters');
+      if (window.ChaptersMod) { ChaptersMod.refresh(); }
+      SY.toast('Load them with “From QC scan” in the Chapters tab', 'ok', 5000);
+    });
   }
 
   function adj(mode) {
@@ -85,6 +90,9 @@ window.ToolsMod = (function (SY) {
     }, function (r) {
       if (!r.ok) { list.innerHTML = '<div class="empty">' + SY.esc(r.error) + '</div>'; return; }
       var issues = r.data.issues || [];
+      SY.lastQcIssues = issues;
+      var toCh = document.getElementById('tlQcToChapters');
+      if (toCh) { toCh.disabled = !issues.length; }
       if (!issues.length) {
         list.innerHTML = '<div class="empty">✅ Clean timeline — no blank frames, offline media or silent holes found.</div>';
         SY.toast('QC scan: clean ✓', 'ok');

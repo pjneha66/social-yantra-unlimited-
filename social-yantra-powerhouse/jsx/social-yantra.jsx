@@ -15,6 +15,7 @@ var SY = {};
 //@include "features/sy-assets.jsxinc"
 //@include "features/sy-truedup.jsxinc"
 //@include "features/sy-tools.jsxinc"
+//@include "features/sy-audio.jsxinc"
 
 /* Ping */
 SY.ping = function () {

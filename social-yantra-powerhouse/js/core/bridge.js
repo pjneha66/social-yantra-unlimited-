@@ -42,6 +42,7 @@ window.SY = (function () {
     SY.paths.media = _p.join(SY.paths.root, 'Media');
     SY.paths.models = _p.join(SY.paths.root, 'WhisperModels');
     SY.paths.library = _p.join(SY.paths.root, 'AssetsLibrary');
+    SY.paths.exports = _p.join(SY.paths.root, 'Exports');
     SY.paths.temp = _p.join(SY.paths.root, 'temp');
   }
 
@@ -93,13 +94,19 @@ window.SY = (function () {
     whisperCli: '',
     whisperModel: '',
     whisperModelDir: '',
+    whisper: { language: 'auto', translate: false, customPrompt: '' },  // en · hi · hinglish
     modelLastDir: '',
     nestRoot: '',
+    exportDir: '',                    // chapters / marker exports (custom location)
     silence: { threshold: -38, minDur: 0.6, padPre: 0.04, padPost: 0.06, mode: 'ripple', minCut: 0.3, linkAV: true },
     filler: { custom: '', pad: 0.02, minLen: 0.08, repeats: true, words: ['um', 'uh', 'er', 'ah', 'hmm', 'like', 'you know', 'i mean', 'sort of', 'kind of', 'basically', 'actually', 'literally', 'right', 'okay'] },
+    duck: { duckDb: -12, attackMs: 120, releaseMs: 450, holdGapMs: 250, baseDb: 0, target: 'music', source: 'vad', minSpeechMs: 100 },
+    beat: { minBpm: 55, maxBpm: 210, every: 1, minGap: 0.12, snap: true, beatsPerBar: 4, mode: 'beats' },
+    chapters: { gapSec: 1.2, maxWords: 60, maxDur: 60, minChapterSec: 10, titleWords: 6, titleStyle: 'first', format: 'csv' },
     wordpop: { wordsPerCap: 1, holdCap: 0.8, popScale: 115, upper: true },
     flow: { keyBudget: 48, antiOvershoot: true },
-    assetsRoot: ''
+    assetsRoot: '',
+    nav: { groupLabels: true, lastView: 'silence' }
   };
   var settings = null;
   SY.loadSettings = function () {
@@ -180,9 +187,17 @@ window.SY = (function () {
 
   /* ---------------------------- dialogs ---------------------------- */
   SY.pickFolder = function (cb) {
-    if (window.cep && window.cep.fs && window.cep.fs.showOpenDialogEx) {
-      var r = window.cep.fs.showOpenDialogEx(false, true, 'Choose folder', [], '');
-      if (r && r.data && r.data.length) { cb(r.data[0]); }
+    var fsObj = window.cep && window.cep.fs;
+    if (fsObj && fsObj.showOpenDialogEx) {
+      var r = fsObj.showOpenDialogEx(false, true, 'Choose folder', [], '');
+      if (r && r.data && r.data.length) { cb(r.data[0]); return; }
+      cb('');
+      return;
+    }
+    if (fsObj && fsObj.showOpenDialog) {
+      var r2 = fsObj.showOpenDialog(false, true, 'Choose folder', [], '');
+      if (r2 && r2.data && r2.data.length) { cb(r2.data[0]); return; }
+      cb('');
       return;
     }
     cb('');
@@ -194,6 +209,54 @@ window.SY = (function () {
       return;
     }
     cb('');
+  };
+  SY.pickSave = function (suggested, filters, cb) {
+    var fsObj = window.cep && window.cep.fs;
+    if (fsObj && fsObj.showSaveDialogEx) {
+      var startDir = SY.exportDir() || SY.paths.root || '';
+      var r = fsObj.showSaveDialogEx('Save file', suggested || 'export.txt', filters || [], startDir, '', '', '');
+      if (r && r.data) { cb(r.data); return; }
+      if (r && r.error) { SY.log('save dialog: ' + r.error, 'warn'); }
+      cb('');
+      return;
+    }
+    cb('');
+  };
+
+  /* ---------------------------- exports ---------------------------- */
+  SY.exportDir = function () {
+    var d = (SY.settings && SY.settings.exportDir) || '';
+    if (d) { return d; }
+    return SY.paths.exports || '';
+  };
+  /* Write text to the export folder (created on demand). Returns path or ''. */
+  SY.saveExport = function (name, text) {
+    var dir = SY.exportDir();
+    if (!dir) { return ''; }
+    var p = SY.hasNode ? SY.require('path').join(dir, name) : name;
+    return SY.writeText(p, text) ? p : '';
+  };
+  SY.freeBytes = function (dir) {
+    if (!SY.hasNode) { return 0; }
+    try {
+      var fs = SY.require('fs');
+      if (typeof fs.statfsSync !== 'function') { return 0; }
+      var st = fs.statfsSync(dir || SY.paths.root);
+      return st.bavail * st.bsize;
+    } catch (e) { return 0; }
+  };
+  SY.clipboard = function (text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return !!ok;
+    } catch (e) { return false; }
   };
 
   /* ---------------------------- ExtendScript RPC ---------------------------- */
@@ -271,6 +334,21 @@ window.SY = (function () {
   SY.esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   }); };
+  SY.slug = function (s) {
+    return String(s == null ? 'export' : s)
+      .replace(/[\\/:*?"<>|\u0900-\u097f]+/g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60) || 'export';
+  };
+  /* seconds -> HH:MM:SS (chapter/export style) */
+  SY.fmtClock = function (s) {
+    if (!isFinite(s) || s < 0) { s = 0; }
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+    function p2(n) { return (n < 10 ? '0' : '') + n; }
+    return p2(h) + ':' + p2(m) + ':' + p2(sec);
+  };
 
   SY.busy = function (btn, on) {
     if (!btn) { return; }

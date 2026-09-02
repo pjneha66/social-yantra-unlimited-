@@ -50,9 +50,28 @@ var SEQ = {
   name: 'TestSeq', sequenceID: 'seq-0001',
   frameSizeHorizontal: 1920, frameSizeVertical: 1080,
   timebase: '10160640000', end: t(41.5),
-  markers: { createMarker: function (sec) { var m = { name: '', comments: '', type: '' }; __markers.push({ at: sec, m: m }); return m; } },
+  markers: {
+    createMarker: function (sec) {
+      var m = {
+        name: '', comments: '', type: 'Comment', guid: 'guid-' + __markers.length,
+        start: t(sec), end: t(sec),
+        setTypeAsComment: function () { this.type = 'Comment'; },
+        setTypeAsChapter: function () { this.type = 'Chapter'; },
+        setTypeAsSegmentation: function () { this.type = 'Segmentation'; }
+      };
+      __markers.push({ at: sec, m: m });
+      return m;
+    },
+    get numMarkers() { return __markers.length; },
+    getFirstMarker: function () { return __markers.length ? __markers[0].m : undefined; },
+    getLastMarker: function () { return __markers.length ? __markers[__markers.length - 1].m : undefined; },
+    getNextMarker: function (cur) {
+      for (var i = 0; i < __markers.length; i++) { if (__markers[i].m === cur) { return i + 1 < __markers.length ? __markers[i + 1].m : undefined; } }
+      return undefined;
+    }
+  },
   videoTracks: { numTracks: 2, 0: null, 1: null },
-  audioTracks: { numTracks: 1, 0: null },
+  audioTracks: { numTracks: 2, 0: null, 1: null },
   getSettings: function () { var fr = new Time(); fr.seconds = 1 / 25; return { videoFrameRate: fr, videoDisplayFormat: 110 }; },
   getPlayerPosition: function () { return t(7.2); },
   setPlayerPosition: function () {},
@@ -73,6 +92,22 @@ var vclipsA = [mkClip('intro.mp4', 'video', 0, 0, 12.5, 0, 12.5, { mediaPath: '/
 SEQ.videoTracks[0] = mkTrack(vclipsA);
 SEQ.videoTracks[1] = mkTrack([]);
 SEQ.audioTracks[0] = mkTrack([mkClip('intro.mp4', 'audio', 0, 0, 20, 0, 20, { mediaPath: '/m/intro.mp4' })]);
+/* A2 = the music bed, with a real Volume › Level parameter to duck */
+var __volKeys = [];
+function volumeComp() {
+  return {
+    displayName: 'Volume',
+    properties: [
+      { displayName: 'Bypass', name: 'Bypass', getValue: function () { return false; }, setValue: function () {} },
+      { displayName: 'Level', name: 'Level',
+        getValue: function () { return 0.17782793939114; },   // Premiere's stored 0.0 dB
+        setTimeVarying: function () {}, removeKeyRange: function () {},
+        setValue: function (v) { __volKeys.push({ op: 'set', v: v }); },
+        setValueAtTime: function (v, tm) { __volKeys.push({ op: 'key', v: v, t: tm.seconds }); return true; } }
+    ]
+  };
+}
+SEQ.audioTracks[1] = mkTrack([mkClip('music_bed.mp3', 'audio', 1, 0, 41.5, 0, 41.5, { mediaPath: '/m/music_bed.mp3', components: [volumeComp()] })]);
 
 function motionComp() {
   return {
@@ -91,7 +126,7 @@ function motionComp() {
 }
 
 var qeSeq = {
-  numVideoTracks: 2, numAudioTracks: 1,
+  numVideoTracks: 2, numAudioTracks: 2,
   getVideoTrackAt: function (i) { return { razor: function (tc) { __razors.push({ tr: 'v' + i, tc: tc }); }, getItemAt: function () { return null; } }; },
   getAudioTrackAt: function (i) { return { razor: function (tc) { __razors.push({ tr: 'a' + i, tc: tc }); } }; },
   addVideoTrack: function () { SEQ.videoTracks.numTracks++; },
@@ -150,7 +185,7 @@ var fs = require('fs'), path = require('path');
 var base = path.join(__dirname, '..', 'jsx');
 ['core/sy-core.jsxinc', 'features/sy-silence.jsxinc', 'features/sy-flow.jsxinc',
  'features/sy-wordpop.jsxinc', 'features/sy-nest.jsxinc', 'features/sy-assets.jsxinc',
- 'features/sy-truedup.jsxinc', 'features/sy-tools.jsxinc'].forEach(function (f) {
+ 'features/sy-truedup.jsxinc', 'features/sy-tools.jsxinc', 'features/sy-audio.jsxinc'].forEach(function (f) {
   var code = fs.readFileSync(path.join(base, f), 'utf8');
   try { (0, eval)(code.replace(/^\/\/@include.*$/gm, '')); console.log('LOADED', f); }
   catch (e) { console.log('LOAD-FAIL', f, e.message); process.exitCode = 1; }
@@ -174,7 +209,9 @@ var r = rpc('ping');
 check('ping', r.ok && r.data.qe === 'available', r);
 
 var topo = rpc('getAudioTopology');
-check('topology has 1 audio clip with media path', topo.ok && topo.data.audioClips.length === 1 && topo.data.audioClips[0].mediaPath === '/m/intro.mp4', topo.data && topo.data.audioClips);
+check('topology finds both audio clips with media paths', topo.ok && topo.data.audioClips.length === 2 &&
+  topo.data.audioClips[0].mediaPath === '/m/intro.mp4' && topo.data.audioClips[1].mediaPath === '/m/music_bed.mp3',
+  topo.data && topo.data.audioClips);
 
 var snap = rpc('snapCuts', { cuts: [{ start: 3.421, end: 5.096 }, { start: 3.44, end: 5.1 }], minCut: 0.3 });
 check('snapCuts merges overlapping + frame-snaps (25fps)', snap.ok && snap.data.length === 1 && Math.abs(snap.data[0].start - 3.44) < 0.001, snap.data);
@@ -223,6 +260,58 @@ check('trueDup cloned + replaced in place', td.ok && __placed.length === 1, td);
 
 var st = rpc('staircase', { dir: 1, frames: 12, trackShift: 0 });
 check('staircase needs 2+ selected (graceful error)', st.ok === false, st);
+
+/* ---------------- Feature 9: audio (ducking / beat razor / markers) ---------------- */
+var at = rpc('getAudioTracks');
+check('getAudioTracks lists A1 dialogue + A2 music',
+  at.ok && at.data.tracks.length === 2 && at.data.tracks[1].clips[0].name === 'music_bed.mp3', at.data && at.data.tracks.length);
+
+check('dB ⇄ linear round trip matches Premiere\'s stored scale',
+  Math.abs(SY.dbToLinear(0) - 0.17782793939114) < 1e-7 &&
+  Math.abs(SY.dbToLinear(-2) - 0.14125375449657) < 1e-7 &&
+  Math.abs(SY.linearToDb(SY.dbToLinear(-12)) + 12) < 1e-6,
+  { zero: SY.dbToLinear(0), m12: SY.dbToLinear(-12), back: SY.linearToDb(SY.dbToLinear(-12)) });
+
+__volKeys.length = 0;
+var duckKeys = [
+  { t: 0, db: 0 }, { t: 1.0, db: 0 }, { t: 1.12, db: -12 }, { t: 4.0, db: -12 },
+  { t: 4.45, db: 0 }, { t: 10, db: 0 }
+];
+var duck = rpc('duckTrack', { tracks: [1], keys: duckKeys, mode: 'keys', baseDb: 0, duckDb: -12 });
+var ducked = __volKeys.filter(function (k) { return k.op === 'key'; });
+var minV = ducked.length ? ducked.reduce(function (a, k) { return Math.min(a, k.v); }, 1) : 1;
+check('duckTrack wrote linear-scale volume keys on the music clip',
+  duck.ok && ducked.length >= 5 && Math.abs(minV - SY.dbToLinear(-12)) < 1e-9 &&
+  /linear/.test(duck.data.clips.join(' ')), { keys: ducked.length, minV: minV, clips: duck.data.clips });
+
+__volKeys.length = 0;
+var dclear = rpc('duckTrack', { tracks: [1], keys: [], mode: 'clear', baseDb: 0 });
+check('duckTrack clear restores the clip level',
+  dclear.ok && __volKeys.some(function (k) { return k.op === 'set'; }), __volKeys);
+
+__markers.length = 0;
+var dmark = rpc('duckTrack', { tracks: [1], keys: duckKeys, mode: 'markers', baseDb: 0 });
+check('duckTrack preview drops a marker at each duck start', dmark.ok && dmark.data.markers === 1, dmark.data);
+
+__razors.length = 0;
+var beats = rpc('razorPoints', { times: [2.001, 2.01, 4.0, 6.0], videoTracks: null, audioTracks: null });
+check('razorPoints frame-snaps + de-dupes, razors v+a tracks',
+  beats.ok && beats.data.cuts === 3 && __razors.length === 3 * (2 + 2),
+  { cut: beats.data, razors: __razors.length });
+
+__razors.length = 0; __markers.length = 0;
+var bmark = rpc('razorPoints', { times: [2.0, 4.0], markers: true, markerPrefix: 'BEAT' });
+check('razorPoints markers mode makes no cuts', bmark.ok && __razors.length === 0 && __markers.length === 2, bmark.data);
+
+var mks = rpc('addMarkers', { markers: [{ at: 1, name: 'Intro', type: 'Chapter' }, { at: 5, name: 'Main', type: 'Chapter' }] });
+check('addMarkers bulk-writes chapter markers', mks.ok && mks.data.added === 2, mks.data);
+
+var read = rpc('getMarkers');
+var names = (read.data || []).map(function (m) { return m.name; });
+check('getMarkers reads names/types back off the ruler',
+  read.ok && names.indexOf('Intro') >= 0 && read.data.length >= 2 &&
+  read.data.filter(function (m) { return m.name === 'Intro'; })[0].type === 'Chapter',
+  { count: read.data && read.data.length, names: names });
 
 console.log(failed ? ('\n' + failed + ' FAILURES') : '\nALL JSX TESTS PASSED');
 process.exit(failed ? 1 : 0);

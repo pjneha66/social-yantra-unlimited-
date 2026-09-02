@@ -29,6 +29,13 @@ window.FillerMod = (function (SY) {
     document.getElementById('fillOnlyFillers').addEventListener('click', function () { selectKind('filler', true); });
     document.getElementById('fillOnlyRepeats').addEventListener('click', function () { selectKind('repeat', true); });
 
+    /* language picker (English · Hindi · Hinglish) */
+    SYLang.renderPicker(document.getElementById('fillLangRow'), function (l) {
+      langNote(l);
+      renderWordChips();
+    });
+    langNote(SYLang.current());
+
     var pad = document.getElementById('fillPad');
     pad.addEventListener('input', function () { document.getElementById('fillPadV').textContent = (+pad.value).toFixed(3) + ' s'; });
     document.getElementById('fillPadV').textContent = (+pad.value).toFixed(3) + ' s';
@@ -37,6 +44,14 @@ window.FillerMod = (function (SY) {
     restore();
     updateEngineTag();
   }
+
+  function langNote(l) {
+    var n = document.getElementById('fillLangNote');
+    if (!n) { return; }
+    var warn = SY.settings.whisperMode === 'cli' ? SYLang.modelWarning(SY.settings.whisperModel) : '';
+    n.innerHTML = SY.esc(l.note) + (warn ? ' <span class="tag err">model</span> ' + SY.esc(warn) : '');
+  }
+
 
   function restore() {
     var f = SY.settings.filler;
@@ -65,7 +80,15 @@ window.FillerMod = (function (SY) {
 
   function renderWordChips() {
     var box = document.getElementById('fillWords');
-    var words = (SY.settings.filler.words && SY.settings.filler.words.length) ? SY.settings.filler.words : DEFAULT_WORDS;
+    var langId = SYLang.current().id;
+    var f = SY.settings.filler;
+    // the dictionary follows the transcription language unless the user edits it
+    if (f.wordsLang !== langId) {
+      f.words = SYLang.fillers(langId);
+      f.wordsLang = langId;
+      SY.saveSettings();
+    }
+    var words = (f.words && f.words.length) ? f.words : SYLang.fillers(langId);
     box.innerHTML = words.map(function (w) {
       return '<span class="chip on" data-w="' + SY.esc(w) + '">' + SY.esc(w) + '</span>';
     }).join('');
@@ -178,30 +201,29 @@ window.FillerMod = (function (SY) {
     els.bar.style.width = '100%';
     if (!words.length) { els.stats.textContent = 'No speech detected by Whisper.'; els.prog.style.display = 'none'; return; }
     words.sort(function (a, b) { return a.start - b.start; });
-    SY.lastTranscript = { words: words, seqName: topo.seq.name, at: Date.now() };
+    SY.lastTranscript = { words: words, seqName: topo.seq.name, at: Date.now(), language: SYLang.current().id, languageLabel: SYLang.current().label };
+    SY.lastSilenceGaps = null;   // timeline changed once we cut — force a rescan
     if (window.WordPopMod && WordPopMod.onTranscript) { WordPopMod.onTranscript(); }
 
     var f = SY.settings.filler;
     var pad = f.pad, minLen = f.minLen;
-    var dict = {};
-    f.words.concat((f.custom || '').split(',').map(function (w) { return w.trim().toLowerCase(); }))
-      .forEach(function (w) { if (w) { dict[w] = true; } });
+    var dict = SYLang.dictionary(f.custom);
 
     hits = [];
-    var norm = function (w) { return w.toLowerCase().replace(/[^a-z\u00c0-\u024f'\s]/g, '').trim(); };
+    var norm = SYLang.norm;
 
     for (var i = 0; i < words.length; i++) {
       var w1 = words[i], n1 = norm(w1.w);
       if (!n1) { continue; }
-      // single-word fillers
-      if (dict[n1]) {
+      // single-word fillers (Devanagari words match through romanisation)
+      if (SYLang.lookup(dict, w1.w)) {
         hits.push({ start: w1.start, end: w1.end, word: n1, kind: 'filler', selected: true });
       }
-      // two-word fillers ("you know", "i mean"…)
+      // two-word fillers ("you know", "पता है"…)
       var w2 = words[i + 1];
       if (w2 && w2.start - w1.end < 0.25) {
         var n2 = norm(w2.w);
-        if (n2 && dict[n1 + ' ' + n2]) {
+        if (n2 && SYLang.lookup(dict, n1 + ' ' + n2)) {
           hits.push({ start: w1.start, end: w2.end, word: n1 + ' ' + n2, kind: 'filler', selected: true });
           i++;
         }
@@ -245,10 +267,11 @@ window.FillerMod = (function (SY) {
     render();
     var total = hits.reduce(function (a, h) { return a + (h.end - h.start); }, 0);
     els.count.textContent = '— ' + hits.length + ' found · ' + total.toFixed(2) + 's';
-    els.stats.innerHTML = 'Whisper found <b>' + words.length + '</b> words · <b>' + hits.length + '</b> removable detections.';
+    els.stats.innerHTML = 'Whisper (' + SY.esc(SYLang.current().label) + ') found <b>' + words.length +
+      '</b> words · <b>' + hits.length + '</b> removable detections.';
     els.cut.disabled = !hits.some(function (h) { return h.selected; });
     els.prog.style.display = 'none';
-    SY.log('filler scan: ' + words.length + ' words, ' + hits.length + ' hits', 'ok');
+    SY.log('filler scan (' + SYLang.current().id + '): ' + words.length + ' words, ' + hits.length + ' hits', 'ok');
     SY.toast(hits.length + ' detections ready to cut', 'ok');
   }
 
