@@ -1,0 +1,309 @@
+/* ==========================================================================
+ * Feature 15 — Quick Effects
+ *
+ * Adding an effect to a timeline clip is only possible through the QE DOM:
+ *   qe.project.getVideoEffectByName('Gaussian Blur')  → effect object
+ *   qeTrack.getItemAt(j).addVideoEffect(effect)       → attaches it
+ * (Adobe staff on the PPro forum: "adding an effect is a QE DOM thing".)
+ * Reading and writing that effect's parameters afterwards uses the supported
+ * TrackItem.components / properties API, which is what the flow and ducking
+ * engines already do.
+ *
+ * Custom .prfpset presets CANNOT be applied through ExtendScript (Adobe: "No"),
+ * so applyPreset is a best-effort name lookup and the panel side installs the
+ * file where Premiere's Effects panel will pick it up.
+ * ========================================================================== */
+
+/* Catalogue the Quick Effects tab renders. `props` are the defaults written
+ * straight after the effect lands; `note` explains what the panel can't set. */
+SY.EFFECTS = [
+  { id: 'warp',        name: 'Warp Stabilizer',  match: ['Warp Stabilizer'],
+    props: {}, note: 'Analyses in the background — Premiere shows progress in the Effect Controls panel.' },
+  { id: 'lumetri',     name: 'Lumetri Color',    match: ['Lumetri Color'],
+    props: {}, note: 'Pick a LUT in Effect Controls; the panel only attaches the effect.' },
+  { id: 'blur',        name: 'Gaussian Blur',    match: ['Gaussian Blur'],
+    props: { 'Blurriness': 12, 'Repeat Edge Pixels': true } },
+  { id: 'shadow',      name: 'Drop Shadow',      match: ['Drop Shadow'],
+    props: { 'Distance': 12, 'Softness': 10, 'Opacity': 0.6, 'Shadow Color': null } },
+  { id: 'crop',        name: 'Crop',             match: ['Crop'],
+    props: { 'Left': 0, 'Right': 0, 'Top': 0, 'Bottom': 0 } },
+  { id: 'ultrakey',    name: 'Ultra Key',        match: ['Ultra Key'],
+    props: {}, note: 'Eyedrop the key colour in Effect Controls — colour values are not scriptable.' },
+  { id: 'basic3d',     name: 'Basic 3D',         match: ['Basic 3D'],
+    props: { 'Swivel': 20, 'Tilt': 0, 'Distance to Image': 120 } },
+  { id: 'cornerpin',   name: 'Corner Pin',       match: ['Corner Pin'],
+    props: {}, note: 'Drag the corner handles in the Program monitor after applying.' },
+  { id: 'dirblur',     name: 'Directional Blur', match: ['Directional Blur'],
+    props: { 'Direction': 0, 'Blur Length': 12 } },
+  { id: 'bw',          name: 'Black & White',    match: ['Black & White', 'Tint'],
+    props: {}, note: 'Falls back to Tint on builds without the Image Control set.' }
+];
+
+/* Every effect name this Premiere build actually reports. */
+SY.listEffects = function (arg) {
+  SY.enableQE();
+  var out = { video: [], audio: [], source: 'qe' };
+  try {
+    var vl = qe.project.getVideoEffectList();
+    var n = SY.qeListCount(vl);
+    for (var i = 0; i < n; i++) {
+      var e = SY.qeListAt(vl, i);
+      var nm = '';
+      try { nm = e.displayName || e.name || String(e); } catch (e1) { nm = ''; }
+      if (nm) { out.video.push(nm); }
+    }
+  } catch (e) { out.error = 'Video effect list unavailable: ' + e.message; }
+  try {
+    var al = qe.project.getAudioEffectList();
+    var m = SY.qeListCount(al);
+    for (var j = 0; j < m; j++) {
+      var a = SY.qeListAt(al, j);
+      var an = '';
+      try { an = a.displayName || a.name || String(a); } catch (e2) { an = ''; }
+      if (an) { out.audio.push(an); }
+    }
+  } catch (e3) {}
+  out.video.sort();
+  out.audio.sort();
+  return { ok: true, data: out };
+};
+
+SY.qeListCount = function (list) {
+  if (!list) { return 0; }
+  if (typeof list.length === 'number') { return list.length; }
+  if (typeof list.numItems === 'number') { return list.numItems; }
+  return 0;
+};
+SY.qeListAt = function (list, i) {
+  try { return list[i]; } catch (e) {
+    try { return list.getItemAt ? list.getItemAt(i) : null; } catch (e2) { return null; }
+  }
+};
+
+/* The QE TrackItem that mirrors a DOM clip (QE counts Empty slots too). */
+SY.qeItemFor = function (qeSeq, meta, isVideo) {
+  var fd = 0.04;
+  try { fd = SY.frameDur(SY.getSeq()); } catch (e) {}
+  var track = null;
+  try { track = isVideo ? qeSeq.getVideoTrackAt(meta.trackIndex) : qeSeq.getAudioTrackAt(meta.trackIndex); } catch (e1) { return null; }
+  if (!track) { return null; }
+  var n = 0;
+  try { n = track.numItems; } catch (e2) { n = 0; }
+  var byName = null;
+  for (var i = 0; i < n; i++) {
+    var it = null;
+    try { it = track.getItemAt(i); } catch (e3) { continue; }
+    if (!it) { continue; }
+    var type = '';
+    try { type = it.type || ''; } catch (e4) {}
+    if (/empty/i.test(type)) { continue; }
+    var st = 0;
+    try { st = SY.t2s(it.start); } catch (e5) { continue; }
+    var nm = '';
+    try { nm = it.name || ''; } catch (e6) {}
+    if (nm === meta.name && Math.abs(st - meta.start) < fd * 0.5) { return it; }
+    if (Math.abs(st - meta.start) < fd * 0.5 && !byName) { byName = it; }
+  }
+  return byName;
+};
+
+/* Write parameters into a component by display name. Returns names applied. */
+SY.setEffectProps = function (clip, compName, props) {
+  var applied = [], failed = [];
+  var comps = null;
+  try { comps = clip.components; } catch (e) { return { applied: applied, failed: ['components unreadable'] }; }
+  var comp = null;
+  for (var i = 0; i < SY.colCount(comps); i++) {
+    var c = null;
+    try { c = comps[i]; } catch (e1) { continue; }
+    if (!c) { continue; }
+    var dn = '';
+    try { dn = String(c.displayName || c.matchName || ''); } catch (e2) {}
+    if (dn === compName || dn.indexOf(compName) !== -1) { comp = c; break; }
+  }
+  if (!comp) { return { applied: applied, failed: ['effect not found on clip: ' + compName] }; }
+
+  var props2 = comp.properties;
+  for (var key in props) {
+    if (!props.hasOwnProperty(key)) { continue; }
+    var val = props[key];
+    if (val === null || val === undefined) { continue; }
+    var found = null;
+    for (var p = 0; p < SY.colCount(props2); p++) {
+      var pr = null;
+      try { pr = props2[p]; } catch (e3) { continue; }
+      if (!pr) { continue; }
+      var pn = '';
+      try { pn = String(pr.displayName || pr.name || ''); } catch (e4) {}
+      if (pn === key) { found = pr; break; }
+    }
+    if (!found) { failed.push(key); continue; }
+    var done = false;
+    try { found.setTimeVarying(false); } catch (e5) {
+      try { found.setTimeVarying(false, true); } catch (e6) {}
+    }
+    try { found.setValue(val, true); done = true; } catch (e7) {
+      try { found.setValue(val); done = true; } catch (e8) {
+        try { done = found.setValueAtTime(val, clip.start); } catch (e9) {}
+      }
+    }
+    if (done) { applied.push(key); } else { failed.push(key); }
+  }
+  return { applied: applied, failed: failed };
+};
+
+/* Toggle the Bypass switch of an attached effect. */
+SY.setEffectBypass = function (clip, compName, on) {
+  return SY.setEffectProps(clip, compName, { 'Bypass': !!on });
+};
+
+/* Which effects are already attached to a clip. */
+SY.listClipEffects = function (arg) {
+  var seq = SY.getSeq();
+  var snap = SY.getClips({ selectedOnly: true });
+  var sel = snap.data || [];
+  var out = [];
+  for (var i = 0; i < sel.length; i++) {
+    var meta = sel[i];
+    var names = [];
+    var track = meta.trackType === 'audio' ? seq.audioTracks[meta.trackIndex] : seq.videoTracks[meta.trackIndex];
+    var clip = null;
+    if (track) {
+      for (var j = 0; j < SY.colCount(track.clips); j++) {
+        var c = SY.clipAt(track, j);
+        if (!c) { continue; }
+        if (Math.abs(SY.t2s(c.start) - meta.start) < SY.frameDur(seq) * 0.25 && c.name === meta.name) { clip = c; break; }
+      }
+    }
+    if (clip) {
+      var comps = null;
+      try { comps = clip.components; } catch (e) {}
+      for (var k = 0; comps && k < SY.colCount(comps); k++) {
+        var cc = null;
+        try { cc = comps[k]; } catch (e2) { continue; }
+        if (!cc) { continue; }
+        try { names.push(String(cc.displayName || cc.matchName || '')); } catch (e3) {}
+      }
+    }
+    out.push({ name: meta.name, start: meta.start, track: meta.trackIndex, trackType: meta.trackType, effects: names });
+  }
+  return { ok: true, data: out };
+};
+
+/* --------------------------------------------------------------- apply --- */
+/* arg: { effects:[{name, props}], custom:[names], preset:'', bypass:false,
+ *        selectedOnly:true, props:{} } */
+SY.applyEffect = function (arg) {
+  arg = arg || {};
+  SY.enableQE();
+  var seq = SY.getSeq();
+  var qeSeq = null;
+  try { qeSeq = SY.getQeSeq(); } catch (e) { return { ok: false, error: 'QE DOM unavailable: ' + e.message }; }
+
+  var snap = SY.getClips({ selectedOnly: true });
+  var sel = snap.data || [];
+  if (!sel.length) { return { ok: false, error: 'Select one or more clips in the timeline first.' }; }
+
+  /* the list of effect names to attach, in order */
+  var wanted = [];
+  var defs = arg.effects || [];
+  for (var d = 0; d < defs.length; d++) {
+    if (defs[d] && defs[d].name) { wanted.push({ name: defs[d].name, props: defs[d].props || null }); }
+  }
+  var custom = arg.custom || [];
+  for (var cu = 0; cu < custom.length; cu++) {
+    if (custom[cu] && String(custom[cu]).length) { wanted.push({ name: String(custom[cu]), props: arg.props || null }); }
+  }
+  if (arg.preset) { wanted.push({ name: String(arg.preset), props: null, preset: true }); }
+  if (!wanted.length) { return { ok: false, error: 'Pick at least one effect.' }; }
+
+  var applied = 0, failed = [], unknown = {}, propNotes = [];
+
+  for (var w = 0; w < wanted.length; w++) {
+    var spec = wanted[w];
+    var effect = null;
+    try { effect = qe.project.getVideoEffectByName(spec.name); } catch (e1) { effect = null; }
+    if (!effect && !spec.preset) {
+      /* some builds only know the audio list, or need the exact display name */
+      try { effect = qe.project.getAudioEffectByName(spec.name); } catch (e2) { effect = null; }
+    }
+    if (!effect) { unknown[spec.name] = true; failed.push(spec.name + ': not found in this Premiere build'); continue; }
+
+    for (var s = 0; s < sel.length; s++) {
+      var meta = sel[s];
+      var isVideo = meta.trackType !== 'audio';
+      var qeItem = SY.qeItemFor(qeSeq, meta, isVideo);
+      if (!qeItem) { failed.push(meta.name + ': no QE item at ' + meta.start.toFixed(2) + 's'); continue; }
+      var ok = false;
+      try { qeItem.addVideoEffect(effect); ok = true; } catch (e3) {
+        try { qeItem.addVideoEffect(effect, 0); ok = true; } catch (e4) {}
+      }
+      if (ok && spec.preset) {
+        failed.push(spec.name + ': custom presets cannot be applied by script — it is installed for the Effects panel instead.');
+      }
+      if (ok) { applied++; }
+      if (!ok) { failed.push(meta.name + ': addVideoEffect refused "' + spec.name + '"'); continue; }
+
+      /* parameters go through the supported DOM once the effect exists */
+      if (spec.props || arg.bypass !== undefined) {
+        var track = isVideo ? seq.videoTracks[meta.trackIndex] : seq.audioTracks[meta.trackIndex];
+        var clip = null;
+        if (track) {
+          for (var j = 0; j < SY.colCount(track.clips); j++) {
+            var c = SY.clipAt(track, j);
+            if (!c) { continue; }
+            if (Math.abs(SY.t2s(c.start) - meta.start) < SY.frameDur(seq) * 0.25 && c.name === meta.name) { clip = c; break; }
+          }
+        }
+        if (clip) {
+          if (spec.props) {
+            var res = SY.setEffectProps(clip, spec.name, spec.props);
+            if (res.failed.length) { propNotes.push(spec.name + ': ' + res.failed.join(', ') + ' left at default'); }
+          }
+          if (arg.bypass !== undefined) {
+            SY.setEffectBypass(clip, spec.name, !!arg.bypass);
+          }
+        }
+      }
+    }
+  }
+
+  var unknownList = [];
+  for (var u in unknown) { if (unknown.hasOwnProperty(u)) { unknownList.push(u); } }
+
+  return {
+    ok: applied > 0,
+    data: {
+      applied: applied, clips: sel.length, effects: wanted.length,
+      unknown: unknownList, propNotes: propNotes, failed: failed
+    },
+    error: applied ? undefined : 'Nothing applied. ' + failed.slice(0, 4).join(' | ')
+  };
+};
+
+/* Bypass / un-bypass an effect that is already on the selection. */
+SY.bypassEffect = function (arg) {
+  var seq = SY.getSeq();
+  var snap = SY.getClips({ selectedOnly: true });
+  var sel = snap.data || [];
+  if (!sel.length) { return { ok: false, error: 'Select one or more clips first.' }; }
+  if (!arg || !arg.name) { return { ok: false, error: 'No effect named.' }; }
+  var touched = 0, failed = [];
+  for (var i = 0; i < sel.length; i++) {
+    var meta = sel[i];
+    var track = meta.trackType === 'audio' ? seq.audioTracks[meta.trackIndex] : seq.videoTracks[meta.trackIndex];
+    var clip = null;
+    if (track) {
+      for (var j = 0; j < SY.colCount(track.clips); j++) {
+        var c = SY.clipAt(track, j);
+        if (!c) { continue; }
+        if (Math.abs(SY.t2s(c.start) - meta.start) < SY.frameDur(seq) * 0.25 && c.name === meta.name) { clip = c; break; }
+      }
+    }
+    if (!clip) { failed.push(meta.name); continue; }
+    var res = SY.setEffectBypass(clip, arg.name, !!arg.on);
+    if (res.applied.length) { touched++; } else { failed.push(meta.name + ' (' + res.failed.join(',') + ')'); }
+  }
+  return { ok: touched > 0, data: { bypassed: touched, on: !!arg.on, failed: failed },
+    error: touched ? undefined : 'No Bypass switch found on "' + arg.name + '".' };
+};

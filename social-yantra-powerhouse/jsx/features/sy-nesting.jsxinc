@@ -1,0 +1,456 @@
+/* ==========================================================================
+ * Feature 14 — Sequence-in-Sequence: Nest · Unnest · Nest Separate
+ *
+ * Premiere's scripting API has no "nest selection" verb, so the engine builds
+ * one out of documented calls:
+ *   1. Sequence.clone()  → the new sequence inherits the source's settings
+ *      exactly (frame size, pixel aspect, frame rate, audio layout). Creating a
+ *      fresh sequence instead would silently inherit the default preset.
+ *   2. Strip every clip outside the selection span, then shift the remaining
+ *      clips left so the nest starts at its own 00:00.
+ *   3. Put the sequence's project item back on the parent timeline at the span
+ *      start (Nest / replace) or leave the span lifted (Nest Separate).
+ * Unnest is the mirror image: read the source sequence's clips and re-place
+ * each project item on the parent timeline at the nest's position.
+ * ========================================================================== */
+
+/* Sequences present right now — used to spot the clone afterwards. */
+SY.nestSeqIds = function () {
+  var ids = {};
+  try {
+    for (var i = 0; i < app.project.sequences.numSequences; i++) {
+      ids[app.project.sequences[i].sequenceID] = true;
+    }
+  } catch (e) {}
+  return ids;
+};
+
+/* Unique-enough name for the new sequence. */
+SY.nestName = function (wanted, base) {
+  var root = (wanted && String(wanted).length) ? String(wanted) : (base || 'Sequence') + ' NEST';
+  root = root.replace(/[\\/:*?"<>|]/g, '_');
+  var used = {};
+  try {
+    for (var i = 0; i < app.project.sequences.numSequences; i++) {
+      used[app.project.sequences[i].name] = true;
+    }
+  } catch (e) {}
+  if (!used[root]) { return root; }
+  var n = 2;
+  while (used[root + ' ' + n] && n < 999) { n++; }
+  return root + ' ' + n;
+};
+
+/* Find the sequence object + project item created by clone()/createNewSequence. */
+SY.nestFindNew = function (beforeIds, nameWanted) {
+  var best = null;
+  try {
+    for (var i = 0; i < app.project.sequences.numSequences; i++) {
+      var s = app.project.sequences[i];
+      var fresh = !beforeIds[s.sequenceID];
+      if (nameWanted && s.name === nameWanted) { return { seq: s, item: s.projectItem }; }
+      if (fresh && !best) { best = { seq: s, item: s.projectItem }; }
+    }
+  } catch (e) {}
+  return best;
+};
+
+/* Read every clip of a sequence as plain data (name, item id, timing, track). */
+SY.nestReadTracks = function (seq) {
+  var out = { video: [], audio: [], numVideo: 0, numAudio: 0 };
+  var i, j;
+  try { out.numVideo = seq.videoTracks.numTracks; } catch (e) {}
+  try { out.numAudio = seq.audioTracks.numTracks; } catch (e2) {}
+  for (i = 0; i < seq.videoTracks.numTracks; i++) {
+    var vt = seq.videoTracks[i];
+    for (j = 0; j < SY.colCount(vt.clips); j++) {
+      var c = SY.clipAt(vt, j);
+      if (!c) { continue; }
+      var row = SY.clipInfo(c, 'video', i);
+      try { row.nodeId = c.projectItem ? c.projectItem.nodeId : ''; } catch (e3) {}
+      out.video.push(row);
+    }
+  }
+  for (i = 0; i < seq.audioTracks.numTracks; i++) {
+    var at = seq.audioTracks[i];
+    for (j = 0; j < SY.colCount(at.clips); j++) {
+      var a = SY.clipAt(at, j);
+      if (!a) { continue; }
+      var rowA = SY.clipInfo(a, 'audio', i);
+      try { rowA.nodeId = a.projectItem ? a.projectItem.nodeId : ''; } catch (e4) {}
+      out.audio.push(rowA);
+    }
+  }
+  return out;
+};
+
+/* Collect the live TrackItems behind a selection snapshot (video + audio). */
+SY.nestLiveRefs = function (seq, snapshot) {
+  var refs = [];
+  var fd = SY.frameDur(seq);
+  for (var i = 0; i < snapshot.length; i++) {
+    var meta = snapshot[i];
+    var track = meta.trackType === 'audio' ? seq.audioTracks[meta.trackIndex] : seq.videoTracks[meta.trackIndex];
+    if (!track) { continue; }
+    for (var j = 0; j < SY.colCount(track.clips); j++) {
+      var c = SY.clipAt(track, j);
+      if (!c) { continue; }
+      if (Math.abs(SY.t2s(c.start) - meta.start) < fd * 0.25 && c.name === meta.name) {
+        refs.push({ clip: c, meta: meta });
+        break;
+      }
+    }
+  }
+  return refs;
+};
+
+/* Open a sequence in the timeline panel, waiting out the async switch. */
+SY.nestOpen = function (seq) {
+  try { seq.openInTimeline(); return true; } catch (e) {}
+  try { qe.project.openSequence(seq.sequenceID); return true; } catch (e2) {}
+  return false;
+};
+
+/* ---------------------------------------------------------------- Nest --- */
+/* Shared core: build a sequence that contains only the selected span.
+ * arg: { name, keepHandles, replace, openAfter, trackOffset } */
+SY.buildNest = function (arg) {
+  var seq = SY.getSeq();
+  var fd = SY.frameDur(seq);
+  var snap = SY.getClips({ selectedOnly: true });
+  var sel = snap.data || [];
+  if (!sel.length) { return { ok: false, error: 'Select one or more clips in the timeline first.' }; }
+
+  sel.sort(function (a, b) { return a.start - b.start; });
+  var st = sel[0].start, en = sel[0].end;
+  for (var i = 1; i < sel.length; i++) {
+    if (sel[i].start < st) { st = sel[i].start; }
+    if (sel[i].end > en) { en = sel[i].end; }
+  }
+  if (en - st <= 0) { return { ok: false, error: 'The selection has no duration.' }; }
+
+  /* optional handles: widen the span so the nest keeps a little extra media */
+  var handle = (arg && arg.keepHandles) ? Math.max(0, +arg.keepHandles) * fd : 0;
+  var spanStart = Math.max(0, st - handle);
+  var spanEnd = Math.min(SY.seqDuration(seq) || en, en + handle);
+
+  var beforeIds = SY.nestSeqIds();
+  var parentName = seq.name;
+  var name = SY.nestName(arg && arg.name, parentName);
+
+  /* 1) clone the active sequence so the settings match exactly */
+  var clone = null;
+  try { clone = seq.clone(); } catch (e1) { clone = null; }
+  if (!clone) {
+    try { clone = app.project.createNewSequence(name, 'SY_' + new Date().getTime()); } catch (e2) { clone = null; }
+    if (clone) { return { ok: false, error: 'Sequence.clone() is unavailable on this build, and a fresh sequence would not match your settings. Update Premiere or nest manually.' }; }
+    return { ok: false, error: 'Could not clone the sequence: ' + (e1 && e1.message ? e1.message : e1) };
+  }
+
+  var found = SY.nestFindNew(beforeIds, '');
+  if (!found || !found.seq) { return { ok: false, error: 'The cloned sequence could not be located in the project.' }; }
+  var nest = found.seq;
+  try { nest.name = name; } catch (e3) {}
+
+  /* 2) open the clone and strip everything outside the span.
+   * Removal invalidates collection indexes, so: snapshot → classify → remove
+   * victims last-to-first → re-read and shift what survived. */
+  SY.nestOpen(nest);
+  var kept = 0, dropped = 0, shiftFails = 0;
+  var shift = spanStart;
+  var tol = fd * 0.25;
+
+  function snapshotNest() {
+    var all = [];
+    for (var pass = 0; pass < 2; pass++) {
+      var isVideo = pass === 0;
+      var tracks = isVideo ? nest.videoTracks : nest.audioTracks;
+      var n = 0;
+      try { n = isVideo ? nest.videoTracks.numTracks : nest.audioTracks.numTracks; } catch (eN) { n = 0; }
+      for (var t = 0; t < n; t++) {
+        var track = tracks[t];
+        for (var k = 0; k < SY.colCount(track.clips); k++) {
+          var c = SY.clipAt(track, k);
+          if (!c) { continue; }
+          all.push({ clip: c, track: track, index: k, video: isVideo,
+            start: SY.t2s(c.start), end: SY.t2s(c.end) });
+        }
+      }
+    }
+    return all;
+  }
+
+  var all = snapshotNest();
+  var victims = [];
+  for (var a1 = 0; a1 < all.length; a1++) {
+    var row1 = all[a1];
+    var overlap = row1.start < spanEnd - tol && row1.end > spanStart + tol;
+    if (!overlap) { victims.push(row1); }
+  }
+  victims.sort(function (x, y) { return y.index - x.index; });
+  for (var a2 = 0; a2 < victims.length; a2++) {
+    var vic = victims[a2].clip;
+    var gone = false;
+    try { vic.remove(false, false); gone = true; } catch (e4) {
+      try { vic.remove(false); gone = true; } catch (e5) {}
+    }
+    if (gone) { dropped++; }
+  }
+
+  /* trim the straddlers and shift the survivors so the nest starts at 0 */
+  var survivors = snapshotNest();
+  for (var a3 = 0; a3 < survivors.length; a3++) {
+    var row3 = survivors[a3];
+    var c3 = row3.clip;
+    var s3 = row3.start, e3 = row3.end;
+    if (s3 < spanStart - tol) { try { c3.start = SY.seconds(spanStart); } catch (e6) {} }
+    if (e3 > spanEnd + tol) { try { c3.end = SY.seconds(spanEnd); } catch (e7) {} }
+    var ns = Math.max(0, SY.t2s(c3.start) - shift), ne = Math.max(0, SY.t2s(c3.end) - shift);
+    var okShift = false;
+    try { c3.end = SY.seconds(ne); c3.start = SY.seconds(ns); okShift = true; }
+    catch (e8) {
+      try { c3.start = SY.seconds(ns); okShift = true; } catch (e9) {}
+    }
+    if (okShift) { kept++; } else { shiftFails++; }
+  }
+  if (!kept) {
+    return { ok: false, error: 'The cloned sequence ended up empty — the selection span could not be isolated on this build.' };
+  }
+
+  /* 3) hand the nest's project item back to the caller */
+  var item = null;
+  try { item = nest.projectItem; } catch (e10) {}
+  if (!item) { item = SY.findItemByName(nest.name); }
+  if (!item) { return { ok: false, error: 'The nested sequence has no project item to place.' }; }
+
+  SY.nestOpen(seq); // back to the parent timeline
+
+  var placed = false;
+  if (arg && arg.replace === false) {
+    /* Nest Separate: lift the span out, leave the hole */
+    var lifted = 0;
+    var refs = SY.nestLiveRefs(seq, sel);
+    refs.sort(function (a, b) { return SY.t2s(b.clip.start) - SY.t2s(a.clip.start); });
+    for (var r = 0; r < refs.length; r++) {
+      try { refs[r].clip.remove(false, false); lifted++; }
+      catch (eL) { try { refs[r].clip.remove(false); lifted++; } catch (eL2) {} }
+    }
+    if (arg.openAfter) { SY.nestOpen(nest); }
+    return {
+      ok: true,
+      data: {
+        name: nest.name, sequenceId: nest.sequenceID, lifted: lifted, kept: kept, dropped: dropped,
+        span: { start: st, end: en }, duration: en - st, replaced: false,
+        shiftFails: shiftFails,
+        note: 'Lifted ' + lifted + ' clip(s) into "' + nest.name + '" — the parent timeline keeps the gap.'
+      }
+    };
+  }
+
+  /* Nest: replace the span with the nest clip */
+  var maxV = 0, maxA = 0;
+  for (var s2 = 0; s2 < sel.length; s2++) {
+    if (sel[s2].trackType === 'audio') { if (sel[s2].trackIndex > maxA) { maxA = sel[s2].trackIndex; } }
+    else if (sel[s2].trackIndex > maxV) { maxV = sel[s2].trackIndex; }
+  }
+
+  /* lift the originals first, so the overwrite cannot collide with them */
+  var refs2 = SY.nestLiveRefs(seq, sel);
+  refs2.sort(function (a, b) { return SY.t2s(b.clip.start) - SY.t2s(a.clip.start); });
+  var lifted2 = 0;
+  for (var r2 = 0; r2 < refs2.length; r2++) {
+    try { refs2[r2].clip.remove(false, false); lifted2++; }
+    catch (eL3) { try { refs2[r2].clip.remove(false); lifted2++; } catch (eL4) {} }
+  }
+
+  try { placed = seq.overwriteClip(item, SY.seconds(st), maxV, maxA); } catch (e11) { placed = false; }
+  if (!placed) { try { placed = seq.overwriteClip(item, SY.seconds(st)); } catch (e12) { placed = false; } }
+  if (!placed) {
+    return { ok: false, error: 'The nested sequence "' + nest.name + '" was created, but could not be placed back on the timeline.' };
+  }
+
+  /* trim the placed nest clip to exactly the span */
+  var vt2 = seq.videoTracks[maxV];
+  var trimmed = false;
+  for (var q = 0; q < SY.colCount(vt2.clips); q++) {
+    var cc = SY.clipAt(vt2, q);
+    if (!cc) { continue; }
+    if (Math.abs(SY.t2s(cc.start) - st) < fd * 0.25 && cc.name === nest.name) {
+      try { cc.outPoint = SY.seconds(spanEnd - spanStart); trimmed = true; } catch (e13) {}
+      try { cc.end = SY.seconds(en); } catch (e14) {}
+      break;
+    }
+  }
+
+  if (arg && arg.openAfter) { SY.nestOpen(nest); }
+
+  return {
+    ok: true,
+    data: {
+      name: nest.name, sequenceId: nest.sequenceID, clipsIn: sel.length, kept: kept, dropped: dropped,
+      span: { start: st, end: en }, duration: en - st, replaced: true, lifted: lifted2,
+      placedAt: st, track: maxV, trimmed: trimmed, shiftFails: shiftFails,
+      note: kept + ' clip(s) now live inside "' + nest.name + '".'
+    }
+  };
+};
+
+SY.nestSelection = function (arg) {
+  arg = arg || {};
+  if (arg.replace === undefined) { arg.replace = true; }
+  return SY.buildNest(arg);
+};
+
+/* Nest Separate — wrap the selection in its own sequence, lift it out of the
+ * parent timeline and (optionally) open the new sequence. */
+SY.nestSeparate = function (arg) {
+  arg = arg || {};
+  arg.replace = false;
+  if (arg.openAfter === undefined) { arg.openAfter = true; }
+  return SY.buildNest(arg);
+};
+
+/* -------------------------------------------------------------- Unnest --- */
+/* Replace each selected nested-sequence clip with the clips it contains. */
+SY.unnestSelection = function (arg) {
+  arg = arg || {};
+  var seq = SY.getSeq();
+  var fd = SY.frameDur(seq);
+  var snap = SY.getClips({ selectedOnly: true });
+  var sel = snap.data || [];
+  var nests = [];
+  for (var i = 0; i < sel.length; i++) {
+    if (sel[i].trackType === 'video' && sel[i].isSequenceItem) { nests.push(sel[i]); }
+  }
+  if (!nests.length) { return { ok: false, error: 'Select one or more nested-sequence clips first.' }; }
+  nests.sort(function (a, b) { return b.start - a.start; });
+
+  var numV = seq.videoTracks.numTracks, numA = seq.audioTracks.numTracks;
+  var placedTotal = 0, notes = [], skipped = 0;
+
+  for (var n = 0; n < nests.length; n++) {
+    var meta = nests[n];
+    var clip = null;
+    var vt = seq.videoTracks[meta.trackIndex];
+    if (!vt) { skipped++; continue; }
+    for (var j = 0; j < SY.colCount(vt.clips); j++) {
+      var c = SY.clipAt(vt, j);
+      if (!c) { continue; }
+      if (Math.abs(SY.t2s(c.start) - meta.start) < fd * 0.25 && c.name === meta.name) { clip = c; break; }
+    }
+    if (!clip) { notes.push('moved, skipped: ' + meta.name); skipped++; continue; }
+
+    var item = null;
+    try { item = clip.projectItem; } catch (eI) {}
+    var srcSeq = item ? SY.sequenceForItem(item) : null;
+    if (!srcSeq) { notes.push('not a sequence: ' + meta.name); skipped++; continue; }
+
+    /* warn (and bail on this nest) if the nest clip is retimed — the maths
+     * below maps source time 1:1 onto the parent timeline */
+    var speed = 1;
+    try {
+      var srcDur = SY.t2s(clip.outPoint) - SY.t2s(clip.inPoint);
+      var tlDur = SY.t2s(clip.end) - SY.t2s(clip.start);
+      if (srcDur > 0 && tlDur > 0) { speed = srcDur / tlDur; }
+    } catch (eS) {}
+    if (speed > 1.01 || speed < 0.99) {
+      notes.push('retimed (' + speed.toFixed(2) + '×), skipped: ' + meta.name);
+      skipped++;
+      continue;
+    }
+
+    var nestStart = SY.t2s(clip.start);
+    var srcIn = SY.t2s(clip.inPoint);
+    var contents = SY.nestReadTracks(srcSeq);
+    var placed = 0;
+
+    var lists = [{ rows: contents.video, kind: 'video' }, { rows: contents.audio, kind: 'audio' }];
+    for (var L = 0; L < lists.length; L++) {
+      var rows = lists[L].rows, isVideo = lists[L].kind === 'video';
+      for (var k = 0; k < rows.length; k++) {
+        var row = rows[k];
+        /* only the part of the nest that is actually on screen */
+        var visStart = row.start, visEnd = row.end;
+        if (visEnd <= srcIn || visStart >= srcIn + (meta.end - meta.start)) { continue; }
+        var srcItem = SY.nestItemByNodeId(row.nodeId) || SY.findItemByName(row.name);
+        if (!srcItem) { notes.push('media missing: ' + row.name); continue; }
+
+        var at = nestStart + (Math.max(visStart, srcIn) - srcIn);
+        var wantV = isVideo ? Math.min(meta.trackIndex + row.trackIndex, 40) : Math.min(meta.trackIndex + row.trackIndex, 40);
+        if (isVideo) { SY.ensureVideoTrackCount(seq, wantV + 1); }
+        var okP = false;
+        try {
+          okP = isVideo
+            ? seq.overwriteClip(srcItem, SY.seconds(at), wantV, -1)
+            : seq.overwriteClip(srcItem, SY.seconds(at), -1, wantV);
+        } catch (e1) { okP = false; }
+        if (!okP) { try { okP = seq.overwriteClip(srcItem, SY.seconds(at)); } catch (e2) { okP = false; } }
+        if (!okP) { notes.push('place failed: ' + row.name); continue; }
+
+        /* restore the in/out the nest had, so the content is not re-trimmed */
+        var trk = isVideo ? seq.videoTracks[wantV] : seq.audioTracks[wantV];
+        for (var q = 0; trk && q < SY.colCount(trk.clips); q++) {
+          var nc = SY.clipAt(trk, q);
+          if (!nc) { continue; }
+          if (Math.abs(SY.t2s(nc.start) - at) < fd * 0.25 && nc.name === row.name) {
+            try { nc.inPoint = SY.seconds(row.inPoint + (Math.max(visStart, srcIn) - row.start)); } catch (e3) {}
+            try { nc.outPoint = SY.seconds(row.inPoint + (Math.min(visEnd, srcIn + (meta.end - meta.start)) - row.start)); } catch (e4) {}
+            try { nc.end = SY.seconds(at + (Math.min(visEnd, srcIn + (meta.end - meta.start)) - Math.max(visStart, srcIn))); } catch (e5) {}
+            break;
+          }
+        }
+        placed++;
+      }
+    }
+
+    /* lift the nest clip itself once its contents are down */
+    var gone = false;
+    try { clip.remove(false, false); gone = true; } catch (e6) {
+      try { clip.remove(false); gone = true; } catch (e7) {}
+    }
+    if (!gone) { notes.push('could not lift nest: ' + meta.name); }
+    placedTotal += placed;
+    notes.push('"' + meta.name + '" → ' + placed + ' clip(s) at ' + nestStart.toFixed(2) + 's');
+  }
+
+  return {
+    ok: placedTotal > 0,
+    data: { placed: placedTotal, nests: nests.length, skipped: skipped, details: notes,
+      tracks: { video: numV, audio: numA } },
+    error: placedTotal ? undefined : 'Nothing was unnested. ' + notes.join(' | ')
+  };
+};
+
+/* Resolve a project item by nodeId (stable across clones). */
+SY.nestItemByNodeId = function (nodeId) {
+  if (!nodeId) { return null; }
+  var found = null;
+  function walk(collection) {
+    if (found) { return; }
+    for (var i = 0; i < collection.numItems; i++) {
+      var it = collection[i];
+      if (found) { return; }
+      if (it.nodeId === nodeId) { found = it; return; }
+      if (it.type === ProjectItemType.BIN && it.children) { walk(it.children); }
+    }
+  }
+  try { walk(app.project.rootItem.children); } catch (e) {}
+  return found;
+};
+
+/* Which sequences are in the project (for the Nest tab's list). */
+SY.nestListSequences = function () {
+  var out = [];
+  try {
+    for (var i = 0; i < app.project.sequences.numSequences; i++) {
+      var s = app.project.sequences[i];
+      var clips = 0, dur = 0;
+      try {
+        for (var v = 0; v < s.videoTracks.numTracks; v++) { clips += SY.colCount(s.videoTracks[v].clips); }
+      } catch (e) {}
+      try { dur = SY.ticksToSeconds(s.end); } catch (e2) {}
+      out.push({ name: s.name, id: s.sequenceID, clips: clips, duration: dur });
+    }
+  } catch (e3) {}
+  return { ok: true, data: out };
+};

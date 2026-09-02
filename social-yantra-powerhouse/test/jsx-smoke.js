@@ -185,7 +185,9 @@ var fs = require('fs'), path = require('path');
 var base = path.join(__dirname, '..', 'jsx');
 ['core/sy-core.jsxinc', 'features/sy-silence.jsxinc', 'features/sy-flow.jsxinc',
  'features/sy-wordpop.jsxinc', 'features/sy-nest.jsxinc', 'features/sy-assets.jsxinc',
- 'features/sy-truedup.jsxinc', 'features/sy-tools.jsxinc', 'features/sy-audio.jsxinc'].forEach(function (f) {
+ 'features/sy-truedup.jsxinc', 'features/sy-tools.jsxinc', 'features/sy-audio.jsxinc',
+ 'features/sy-nesting.jsxinc', 'features/sy-effects.jsxinc', 'features/sy-frames.jsxinc',
+ 'features/sy-layers.jsxinc'].forEach(function (f) {
   var code = fs.readFileSync(path.join(base, f), 'utf8');
   try { (0, eval)(code.replace(/^\/\/@include.*$/gm, '')); console.log('LOADED', f); }
   catch (e) { console.log('LOAD-FAIL', f, e.message); process.exitCode = 1; }

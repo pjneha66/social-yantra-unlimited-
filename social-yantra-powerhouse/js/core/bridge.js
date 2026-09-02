@@ -44,6 +44,9 @@ window.SY = (function () {
     SY.paths.library = _p.join(SY.paths.root, 'AssetsLibrary');
     SY.paths.exports = _p.join(SY.paths.root, 'Exports');
     SY.paths.temp = _p.join(SY.paths.root, 'temp');
+    SY.paths.captures = _p.join(SY.paths.root, 'Captures');   // pasted stills, layer renders
+    SY.paths.downloads = _p.join(SY.paths.root, 'Downloads'); // yt-dlp output
+    SY.paths.cutouts = _p.join(SY.paths.root, 'Cutouts');     // rembg output
   }
 
   /* ---------------------------- logging ---------------------------- */
@@ -106,6 +109,15 @@ window.SY = (function () {
     wordpop: { wordsPerCap: 1, holdCap: 0.8, popScale: 115, upper: true },
     flow: { keyBudget: 48, antiOvershoot: true },
     assetsRoot: '',
+    /* external engines (auto-detected; set only to override) */
+    rembgBin: '',
+    ytdlpBin: '',
+    fontFile: '',
+    /* Quick Effects · Layer Tools · AI Image · Downloader */
+    quickfx: { custom: '', props: '', last: [] },
+    layers: { text: 'YOUR TEXT', size: 0, color: '#ffffff', outline: 0, shadow: true, font: '', solid: '#7c5cff', alpha: 1, duration: 5 },
+    aiimage: { model: 'u2net', alphaMatting: false, erode: '', fg: '', bg: '', duration: 5 },
+    get: { dir: '', quality: 'best', audio: 'none', cookies: '', browser: '', fps: '', noPlaylist: true, merge: true, keyframes: true },
     nav: { groupLabels: true, lastView: 'silence' }
   };
   var settings = null;

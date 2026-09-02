@@ -16,4 +16,14 @@ echo "== chapters / export smoke =="
 node test/chapters-smoke.js
 echo "== transcription language smoke =="
 node test/lang-smoke.js
+echo "== nesting / effects / layers engine smoke =="
+node test/nest-smoke.js
+echo "== frame QC + stills smoke =="
+node test/frameqc-smoke.js
+echo "== downloader (yt-dlp) arguments smoke =="
+node test/getargs-smoke.js
+echo "== UI / ExtendScript wiring smoke =="
+node test/ui-wiring-smoke.js
+echo "== media integration smoke (needs ffmpeg; set SY_FFMPEG to pin a binary) =="
+node test/media-smoke.js
 echo "ALL SUITES PASSED"

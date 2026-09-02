@@ -1,0 +1,156 @@
+/* ==========================================================================
+ * Feature 17 — Layer Tools
+ * Text / Solid layers are rendered to PNG panel-side (js/core/stills.js uses
+ * ffmpeg colour + drawtext sources) and placed here as real stills on a fresh
+ * video track, so they behave exactly like a layer you'd drop in by hand.
+ * Adjustment layers reuse the template-adopt engine in sy-tools.jsxinc.
+ * ========================================================================== */
+
+/* Place a rendered still as a layer above the selection.
+ * arg: { path, durationSec, mode:'span'|'playhead'|'full', track:'top'|number,
+ *        binName, name } */
+SY.addStillLayer = function (arg) {
+  var seq = SY.getSeq();
+  if (!arg || !arg.path) { return { ok: false, error: 'No image to place.' }; }
+  var f = new File(arg.path);
+  if (!f.exists) { return { ok: false, error: 'Rendered layer missing: ' + arg.path }; }
+
+  /* span of the selection (or the whole sequence) */
+  var snap = SY.getClips({ selectedOnly: true });
+  var sel = snap.data || [];
+  var st = SY.playerSeconds(seq), en = st + (+arg.durationSec || 5);
+  var topTrack = 0;
+  if (sel.length) {
+    st = sel[0].start; en = sel[0].end;
+    for (var i = 1; i < sel.length; i++) {
+      if (sel[i].trackType !== 'video') { continue; }
+      if (sel[i].start < st) { st = sel[i].start; }
+      if (sel[i].end > en) { en = sel[i].end; }
+      if (sel[i].trackIndex > topTrack) { topTrack = sel[i].trackIndex; }
+    }
+  }
+  var mode = arg.mode || (sel.length ? 'span' : 'playhead');
+  if (mode === 'full') { st = 0; en = SY.seqDuration(seq) || 10; }
+  if (mode === 'playhead') { en = st + (+arg.durationSec || 5); }
+  if (en <= st) { en = st + 1; }
+
+  var track = (arg.track === 'top' || arg.track === undefined || arg.track === null)
+    ? topTrack + 1 : +arg.track;
+  if (track < 0) { track = 0; }
+  SY.ensureVideoTrackCount(seq, track + 1);
+
+  var res = SY.pasteImage({
+    path: arg.path, durationSec: en - st, track: track,
+    binName: arg.binName || 'Social Yantra Layers', at: st, mode: 'overwrite'
+  });
+  if (!res.ok) { return res; }
+  res.data.span = { start: st, end: en };
+  res.data.mode = mode;
+  res.data.track = track;
+  return res;
+};
+
+/* Move the selected clips up or down by N video tracks.
+ * arg: { dir: 1|-1, amount: n } — QE cross-track move with a remove+overwrite
+ * fallback for builds whose QE lacks moveToTrack. */
+SY.moveLayerTrack = function (arg) {
+  var seq = SY.getSeq();
+  var fd = SY.frameDur(seq);
+  var dir = (arg && arg.dir < 0) ? -1 : 1;
+  var amount = Math.max(1, (arg && arg.amount) ? +arg.amount : 1);
+  var snap = SY.getClips({ selectedOnly: true });
+  var sel = snap.data || [];
+  var vids = [];
+  for (var i = 0; i < sel.length; i++) { if (sel[i].trackType === 'video') { vids.push(sel[i]); } }
+  if (!vids.length) { return { ok: false, error: 'Select one or more video clips first.' }; }
+  /* moving up: do the topmost first so we never stack onto a clip we're about
+     to move; moving down: bottommost first. */
+  vids.sort(function (a, b) { return dir > 0 ? b.trackIndex - a.trackIndex : a.trackIndex - b.trackIndex; });
+
+  var qeSeq = null;
+  try { qeSeq = SY.getQeSeq(); } catch (e) { qeSeq = null; }
+
+  var moved = 0, blocked = [], fallback = 0;
+  for (var k = 0; k < vids.length; k++) {
+    var meta = vids[k];
+    var want = meta.trackIndex + dir * amount;
+    if (want < 0) { blocked.push(meta.name + ': already on V1'); continue; }
+    SY.ensureVideoTrackCount(seq, want + 1);
+    if (want >= seq.videoTracks.numTracks) { blocked.push(meta.name + ': no track ' + (want + 1)); continue; }
+
+    /* find the live clip */
+    var srcTrack = seq.videoTracks[meta.trackIndex];
+    var clip = null;
+    for (var j = 0; srcTrack && j < SY.colCount(srcTrack.clips); j++) {
+      var c = SY.clipAt(srcTrack, j);
+      if (!c) { continue; }
+      if (Math.abs(SY.t2s(c.start) - meta.start) < fd * 0.25 && c.name === meta.name) { clip = c; break; }
+    }
+    if (!clip) { blocked.push(meta.name + ': moved since selection'); continue; }
+
+    /* 1) QE cross-track move */
+    var done = false;
+    if (qeSeq) {
+      var qeItem = SY.qeItemFor(qeSeq, meta, true);
+      if (qeItem) {
+        var names = ['moveToTrack', 'setTrack', 'setVideoTrack'];
+        for (var n = 0; n < names.length && !done; n++) {
+          try { qeItem[names[n]](want); done = true; } catch (eM) {}
+        }
+      }
+    }
+
+    /* 2) fallback: lift and re-place on the target track */
+    if (!done) {
+      var item = null;
+      try { item = clip.projectItem; } catch (eI) {}
+      var at = SY.t2s(clip.start), ip = SY.t2s(clip.inPoint), op = SY.t2s(clip.outPoint);
+      var lifted = false;
+      try { clip.remove(false, false); lifted = true; } catch (eR) {
+        try { clip.remove(false); lifted = true; } catch (eR2) {}
+      }
+      if (lifted && item) {
+        var okP = false;
+        try { okP = seq.overwriteClip(item, SY.seconds(at), want, -1); } catch (eO) { okP = false; }
+        if (okP) {
+          var dst = seq.videoTracks[want];
+          for (var q = 0; q < SY.colCount(dst.clips); q++) {
+            var dc = SY.clipAt(dst, q);
+            if (!dc) { continue; }
+            if (Math.abs(SY.t2s(dc.start) - at) < fd * 0.25 && dc.name === meta.name) {
+              try { dc.inPoint = SY.seconds(ip); } catch (eIP) {}
+              try { dc.outPoint = SY.seconds(op); } catch (eOP) {}
+              break;
+            }
+          }
+          fallback++;
+          done = true;
+        } else { blocked.push(meta.name + ': could not re-place on V' + (want + 1)); }
+      }
+    }
+    if (done) { moved++; } else { blocked.push(meta.name + ': no cross-track move on this build'); }
+  }
+
+  return {
+    ok: moved > 0,
+    data: { moved: moved, dir: dir, amount: amount, fallback: fallback, blocked: blocked,
+      tracks: seq.videoTracks.numTracks },
+    error: moved ? undefined : 'Nothing moved. ' + blocked.slice(0, 3).join(' | ')
+  };
+};
+
+/* Report the video track stack for the Layer Tools tab. */
+SY.layerStack = function () {
+  var seq = SY.getSeq();
+  var out = [];
+  for (var i = 0; i < seq.videoTracks.numTracks; i++) {
+    var vt = seq.videoTracks[i];
+    var n = 0;
+    try { n = SY.colCount(vt.clips); } catch (e) { n = 0; }
+    var locked = false, hidden = false;
+    try { locked = vt.isLocked(); } catch (e1) {}
+    try { hidden = vt.isHidden ? vt.isHidden() : false; } catch (e2) {}
+    out.push({ index: i, label: 'V' + (i + 1), clips: n, locked: locked, hidden: hidden });
+  }
+  return { ok: true, data: { tracks: out, numVideo: seq.videoTracks.numTracks, numAudio: seq.audioTracks.numTracks } };
+};

@@ -365,3 +365,30 @@ a:hover { text-decoration: underline; }
 
 /* chapter / cut-point chips wrap */
 #btCutList .list-row { display: block; }
+
+/* ---------------------------------------------------------------- Quick
+ * Effects tiles, colour swatches and the external-tool log boxes.
+ * --------------------------------------------------------------------- */
+.fx-tile {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 8px 7px; cursor: pointer; text-align: left;
+}
+.fx-tile b { font-size: 10.5px; font-weight: 700; letter-spacing: .2px; }
+.fx-tile i { font-size: 9.5px; font-style: normal; color: var(--txt-2); line-height: 1.3; }
+.fx-tile.on { border-color: var(--accent); background: rgba(124,92,255,.14); }
+.fx-tile.on b { color: #fff; }
+.fx-tile.on i { color: var(--accent-2); }
+
+.swatch {
+  width: 26px; height: 22px; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--stroke-hi);
+  transition: transform .12s ease;
+}
+.swatch:hover { transform: translateY(-2px) scale(1.08); border-color: var(--accent); }
+
+.logbox {
+  margin: 0; padding: 8px 9px; max-height: 190px; overflow-y: auto;
+  background: var(--bg-1); border: 1px solid var(--stroke); border-radius: 8px;
+  font-family: var(--mono); font-size: 10px; line-height: 1.45;
+  color: var(--txt-1); white-space: pre-wrap; word-break: break-word;
+}
