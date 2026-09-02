@@ -88,7 +88,7 @@ window.SYStills = (function (SY) {
     var list = [];
     if (SY.settings && SY.settings.fontFile) { list.push(SY.settings.fontFile); }
     if (SY.os === 'win') {
-      var w = (SY.hasNode && process.env.windir) ? process.env.windir : 'C:\\Windows';
+      var w = SY.env.windir || SY.env.WINDIR || 'C:\\Windows';
       list = list.concat([
         w + '\\Fonts\\arialbd.ttf', w + '\\Fonts\\arial.ttf',
         w + '\\Fonts\\segoeuib.ttf', w + '\\Fonts\\segoeui.ttf',

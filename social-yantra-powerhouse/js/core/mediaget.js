@@ -229,7 +229,7 @@ window.SYMediaGet = (function (SY) {
       if (home) {
         list.push({ bin: SY.require('path').join(home, '.local', 'bin', 'yt-dlp'), args: [], label: '~/.local/bin' });
         if (SY.os === 'win') {
-          var appdata = process.env && process.env.APPDATA;
+          var appdata = SY.env.APPDATA;
           if (appdata) { list.push({ bin: SY.require('path').join(appdata, 'Python', 'Scripts', 'yt-dlp.exe'), args: [], label: 'AppData Scripts' }); }
         }
       }
