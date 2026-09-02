@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExportRecipe Version="1.0" Caps="8ef4a018-7f2c-4345-8d95-4b2b0f1d9c0d">
+	<!-- Social Yantra Powerhouse — H.264 Master 40 Mbps (.mp4)
+	     Fallback nest-saver preset for machines without ProRes support. -->
+	<ExportPath UseCompFolder="false"></ExportPath>
+	<ExportFileName>SY_Nest</ExportFileName>
+	<ExportRange>0</ExportRange>
+	<IsMultiFile>false</IsMultiFile>
+	<OriginalFlag>false</OriginalFlag>
+	<Format>
+		<ID>5cd94191-ea0f-4bb9-8a1f-5d3cd0d3f6a3</ID>
+		<Name>H.264</Name>
+		<Extension>mp4</Extension>
+		<Codec>
+			<ID>8e1c3b26-ea0f-4bb9-8a1f-5d3cd0d3f6a3</ID>
+			<Name>H.264</Name>
+			<SpecificFormat></SpecificFormat>
+			<MaxBitDepth>2</MaxBitDepth>
+			<Rec601Luma>false</Rec601Luma>
+			<Rec601Chroma>false</Rec601Chroma>
+			<VideoInfo>
+				<FrameSize>
+					<Width>0</Width>
+					<Height>0</Height>
+					<FrameRate>0</FrameRate>
+				</FrameSize>
+				<PixelAspectRatio>0</PixelAspectRatio>
+				<FieldType>0</FieldType>
+			</VideoInfo>
+			<Bitrate>
+				<Mode>2</Mode>
+				<Target>40000</Target>
+				<Max>48000</Max>
+			</Bitrate>
+		</Codec>
+		<AudioCodec>
+			<ID>ee97d0d3-ea0f-4bb9-8a1f-5d3cd0d3f6a3</ID>
+			<Name>AAC</Name>
+			<Channels>2</Channels>
+			<SampleRate>48000</SampleRate>
+			<SampleSize>16</SampleSize>
+			<Bitrate>320</Bitrate>
+		</AudioCodec>
+		<Filters></Filters>
+		<Summary>H.264 · 40 Mbps VBR 2-pass · AAC 320</Summary>
+	</Format>
+</ExportRecipe>

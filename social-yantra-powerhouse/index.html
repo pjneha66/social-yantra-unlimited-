@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval';">
+<title>Social Yantra Powerhouse Panel</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============================ SIDEBAR ============================ -->
+  <nav id="side">
+    <div class="logo">SY</div>
+    <button class="nav-btn active" data-view="silence" title="Silence Cutter">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+      <span class="tip">AI Silence Cut &amp; VAD</span>
+    </button>
+    <button class="nav-btn" data-view="filler" title="Filler Remover">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      <span class="tip">Filler &amp; Repetition Cleanup</span>
+    </button>
+    <button class="nav-btn" data-view="flow" title="Flow Curves">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 3 22 21 2 21"/><path d="M3 19c4 0 5-14 9-14s4 8 9 8"/></svg>
+      <span class="tip">Interactive Graph Editor 2.0</span>
+    </button>
+    <button class="nav-btn" data-view="wordpop" title="Word Pop">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="tip">Word-Pop Captions</span>
+    </button>
+    <button class="nav-btn" data-view="nest" title="Nest Saver">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
+      <span class="tip">Nest Saver — Backup Engine</span>
+    </button>
+    <button class="nav-btn" data-view="assets" title="Assets Library">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="tip">Local Assets Library</span>
+    </button>
+    <button class="nav-btn" data-view="truedup" title="True Dup">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span class="tip">True Dup — Nest Cloning</span>
+    </button>
+    <button class="nav-btn" data-view="tools" title="Timeline Tools">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      <span class="tip">Timeline Shortcut Tools</span>
+    </button>
+    <div class="nav-spacer"></div>
+    <button class="nav-btn" data-view="models" title="AI Models">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      <span class="tip">Whisper AI Models</span>
+    </button>
+    <button class="nav-btn" data-view="settings" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="tip">Settings &amp; Diagnostics</span>
+    </button>
+  </nav>
+
+  <!-- ============================ MAIN ============================ -->
+  <div id="main">
+    <div id="topbar">
+      <div>
+        <div class="title">Social Yantra <span style="background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Powerhouse</span></div>
+        <div class="sub" id="seqInfo">No active sequence</div>
+      </div>
+      <div class="conn-pill" id="connPill"><span class="dot" id="connDot"></span><span id="connLabel">connecting…</span></div>
+    </div>
+
+    <div id="content">
+
+      <!-- ======================= 1. SILENCE CUTTER ======================= -->
+      <section class="view active" id="view-silence">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>AI Silence Cut &amp; Voice Activity Detection</h1>
+          <p>Cut the silence, keep the pace. The VAD engine analyzes your sequence's audio waveforms locally, detects dead space and performs frame-accurate ripple cuts — with smart A/V linking.</p>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <button class="btn primary flex1" id="silScan"><span class="spin"></span>&#9889; Detect Silence</button>
+            <button class="btn" id="silRefresh">Rescan Track Info</button>
+          </div>
+          <div class="stat-line" id="silStats">Analyze audio on all tracks to reveal detected gaps.</div>
+          <div class="prog mt4" id="silProg" style="display:none"><div></div></div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">Detected Gaps</div>
+          <div class="list" id="silList"><div class="empty">No scan yet.</div></div>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <button class="btn primary flex1" id="silCut" disabled><span class="spin"></span>&#9986; Ripple Cut Selected Gaps</button>
+            <button class="btn danger" id="silClear" disabled>Clear</button>
+          </div>
+          <label class="check mt8"><input type="checkbox" id="silPreviewOnly"> Preview only — add markers, do not cut</label>
+        </div>
+
+        <div class="acc" id="silFine">
+          <div class="acc-head">&#9881; Fine Tune — threshold, minimum duration &amp; padding<span class="chev">&#9660;</span></div>
+          <div class="acc-body">
+            <div class="field">
+              <label>Silence threshold <span class="hint">(below this dBFS = silence)</span></label>
+              <div class="range-line"><input type="range" id="silThreshold" min="-60" max="-20" step="1" value="-38"><span class="val" id="silThresholdV">-38 dB</span></div>
+            </div>
+            <div class="field mt8">
+              <label>Minimum silence duration</label>
+              <div class="range-line"><input type="range" id="silMinDur" min="0.2" max="3" step="0.1" value="0.6"><span class="val" id="silMinDurV">0.60 s</span></div>
+            </div>
+            <div class="grid2 mt8">
+              <div class="field">
+                <label>Padding before</label>
+                <div class="range-line"><input type="range" id="silPadPre" min="0" max="0.5" step="0.01" value="0.04"><span class="val" id="silPadPreV">0.04 s</span></div>
+              </div>
+              <div class="field">
+                <label>Padding after</label>
+                <div class="range-line"><input type="range" id="silPadPost" min="0" max="0.5" step="0.01" value="0.06"><span class="val" id="silPadPostV">0.06 s</span></div>
+              </div>
+            </div>
+            <div class="grid2 mt8">
+              <div class="field">
+                <label>Cut mode</label>
+                <select id="silMode">
+                  <option value="ripple">Ripple cut (close gaps)</option>
+                  <option value="lift">Lift (leave gaps)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Minimum gap to cut</label>
+                <input type="number" id="silMinCut" value="0.3" step="0.05" min="0.05">
+              </div>
+            </div>
+            <label class="check mt8"><input type="checkbox" id="selLinkAV" checked> Smart A/V linking — keep video in sync via media paths &amp; source timing</label>
+            <div class="note mt8"><b>Smart AV linking:</b> cuts are applied across all unlocked tracks; detached audio is detected via media path + source timing and re-linked automatically after the ripple.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= 2. FILLER REMOVER ======================= -->
+      <section class="view" id="view-filler">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Filler Word &amp; Repetition Cleanup</h1>
+          <p>Local Whisper AI transcribes clip audio with millisecond word timestamps — no cloud, absolute privacy — then razor-cuts stutters, repeats and filler words.</p>
+        </div>
+
+        <div class="card" id="fillEngineCard">
+          <div class="row">
+            <span class="tag info" id="fillEngineTag">engine: not configured</span>
+            <span class="flex1"></span>
+            <button class="btn sm" id="fillTestEngine">Test engine</button>
+            <button class="btn sm" id="fillGotoModels">Whisper Models &#8594;</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <button class="btn primary flex1" id="fillAnalyze"><span class="spin"></span>&#127908; Transcribe &amp; Find Fillers</button>
+          </div>
+          <div class="stat-line" id="fillStats">Uses the audio of selected clips, or the whole sequence if nothing is selected.</div>
+          <div class="prog mt4" id="fillProg" style="display:none"><div></div></div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">Detections <span class="mini" id="fillCount"></span></div>
+          <div class="list" id="fillList"><div class="empty">No transcription yet.</div></div>
+          <div class="row mt8">
+            <button class="btn sm" id="fillSelAll">Select all</button>
+            <button class="btn sm" id="fillSelNone">Select none</button>
+            <button class="btn sm" id="fillOnlyFillers">Only fillers</button>
+            <button class="btn sm" id="fillOnlyRepeats">Only repeats/stutters</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <button class="btn primary block" id="fillCut" disabled><span class="spin"></span>&#9986; Ripple Cut Selected Detections</button>
+        </div>
+
+        <div class="acc" id="fillFine">
+          <div class="acc-head">&#9881; Fine Tune — filler dictionary &amp; cut safety<span class="chev">&#9660;</span></div>
+          <div class="acc-body">
+            <div class="row" id="fillWords"></div>
+            <div class="field mt8">
+              <label>Custom filler words <span class="hint">(comma separated)</span></label>
+              <input type="text" id="fillCustom" placeholder="hmm, basically, you know what i mean">
+            </div>
+            <div class="grid2 mt8">
+              <div class="field">
+                <label>Padding around cut</label>
+                <div class="range-line"><input type="range" id="fillPad" min="0" max="0.2" step="0.005" value="0.02"><span class="val" id="fillPadV">0.02 s</span></div>
+              </div>
+              <div class="field">
+                <label>Min word length to cut</label>
+                <input type="number" id="fillMinLen" value="0.08" step="0.01" min="0.02">
+              </div>
+            </div>
+            <label class="check mt8"><input type="checkbox" id="fillRepeatOn" checked> Remove repeated words &amp; stutters ("the the", "I-I-I")</label>
+            <label class="check"><input type="checkbox" id="fillPreviewOnly"> Preview only — add markers, do not cut</label>
+            <div class="note mt8"><b>Seamless ripple cuts:</b> non-overlapping frame-accurate razor cuts; the sequence stays fully synchronized.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= 3. FLOW CURVES ======================= -->
+      <section class="view" id="view-flow">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Interactive Graph Editor 2.0 — The Flow Tab</h1>
+          <p>Six interactive mathematical easing models, infinite custom presets, and greedy-fit curve baking that works around Premiere's lack of bezier keyframe handles.</p>
+        </div>
+
+        <div id="flowCanvasWrap"><canvas id="flowCanvas"></canvas></div>
+
+        <div class="section mt12">
+          <div class="section-head">Curve Suite</div>
+          <div class="ease-pick" id="flowPicks"></div>
+        </div>
+
+        <div class="card" id="flowParams">
+          <div class="grid2" id="flowParamGrid"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">Preset Library</div>
+          <div class="flow-tabs" id="flowLibTabs">
+            <span class="chip on" data-lib="base">Base Eases</span>
+            <span class="chip" data-lib="user">My Curves</span>
+            <span class="chip" data-lib="local">Local Folder</span>
+          </div>
+          <div class="list" id="flowPresets"><div class="empty">No presets.</div></div>
+          <div class="row mt8">
+            <input type="text" id="flowPresetName" placeholder="Preset name" style="flex:1">
+            <button class="btn sm" id="flowSavePreset">Save current</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="grid2">
+            <div class="field">
+              <label>Target property</label>
+              <select id="flowProp">
+                <option value="Scale">Motion &#8250; Scale</option>
+                <option value="Position">Motion &#8250; Position</option>
+                <option value="Anchor Point">Motion &#8250; Anchor Point</option>
+                <option value="Rotation">Motion &#8250; Rotation</option>
+                <option value="Opacity">Opacity &#8250; Opacity</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Time range</label>
+              <select id="flowRange">
+                <option value="clip">Each selected clip</option>
+                <option value="work">Work area</option>
+                <option value="custom">Custom range (s)</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid3 mt8">
+            <div class="field"><label>From</label><input type="number" id="flowFrom" value="0" step="1"></div>
+            <div class="field"><label>To</label><input type="number" id="flowTo" value="100" step="1"></div>
+            <div class="field"><label>Duration (s)</label><input type="number" id="flowDur" value="1" step="0.1" min="0.1"></div>
+          </div>
+          <div class="grid2 mt8" id="flowSpatial" style="display:none">
+            <div class="field"><label>From X, Y <span class="hint">(offset px)</span></label><input type="text" id="flowFromXY" value="0, 0"></div>
+            <div class="field"><label>To X, Y <span class="hint">(offset px)</span></label><input type="text" id="flowToXY" value="160, -90"></div>
+          </div>
+          <div class="field mt8">
+            <label>Keyframe budget <span class="hint">(greedy-fit reduces to the minimum that preserves the curve)</span></label>
+            <div class="range-line"><input type="range" id="flowKeys" min="4" max="120" step="1" value="48"><span class="val" id="flowKeysV">48</span></div>
+          </div>
+          <label class="check mt8"><input type="checkbox" id="flowAnti" checked> Anti-overshoot safety for spatial properties (Position / Anchor Point)</label>
+          <button class="btn primary block mt8" id="flowBake"><span class="spin"></span>&#128293; Bake Curve to Keyframes</button>
+          <div class="stat-line" id="flowStat">Greedy-fit baking ready.</div>
+        </div>
+      </section>
+
+      <!-- ======================= 4. WORD POP ======================= -->
+      <section class="view" id="view-wordpop">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Automated Word-Pop Captions &amp; Subtitles</h1>
+          <p>Word-by-word animated captions with pre-baked snapping scale &amp; opacity curves, injected into native Premiere caption tracks — with hold logic that kills flicker.</p>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <button class="btn primary flex1" id="wpFromFiller"><span class="spin"></span>&#127908; Transcribe for Captions</button>
+            <button class="btn" id="wpImportSrt">Import .srt / .vtt</button>
+          </div>
+          <div class="stat-line" id="wpStat">Source: last transcription, an SRT file, or paste below.</div>
+          <div class="field mt8">
+            <label>Or paste caption text</label>
+            <textarea id="wpPaste" placeholder="Paste a script — timing auto-distributes across the sequence work area."></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="grid3">
+            <div class="field"><label>Words / caption</label><input type="number" id="wpWords" value="1" min="1" max="8"></div>
+            <div class="field"><label>Hold cap (s)</label><input type="number" id="wpHold" value="0.8" min="0.1" max="0.8" step="0.05"></div>
+            <div class="field"><label>Pop scale %</label><input type="number" id="wpPop" value="115" min="100" max="200"></div>
+          </div>
+          <label class="check mt8"><input type="checkbox" id="wpUpper" checked> UPPERCASE</label>
+        </div>
+
+        <div class="section">
+          <div class="section-head">Preview</div>
+          <div class="list" id="wpList"><div class="empty">No caption data yet.</div></div>
+        </div>
+
+        <div class="card">
+          <button class="btn primary block" id="wpCreate" disabled><span class="spin"></span>&#128172; Create Native Caption Track</button>
+          <button class="btn block mt8" id="wpBakePop">&#9889; Bake pop animation onto selected clip</button>
+          <div class="note mt8"><b>Native lanes:</b> subtitles are injected into a real Premiere caption track (Subtitle format) so you keep absolute styling control. Hold logic keeps each word on-screen until the next one starts (capped at 0.8s).</div>
+        </div>
+      </section>
+
+      <!-- ======================= 5. NEST SAVER ======================= -->
+      <section class="view" id="view-nest">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Nest Saver — Premium Backup Engine</h1>
+          <p>One-click secure backups of nested sequences: high-quality ProRes 422 HQ export, PNG thumbnail and structured project library. Cross-project restore at tick-accurate positions.</p>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <button class="btn primary flex1" id="nsBackup"><span class="spin"></span>&#128190; Backup Selected Nest / Active Sequence</button>
+          </div>
+          <div class="grid2 mt8">
+            <div class="field">
+              <label>Export preset</label>
+              <select id="nsPreset">
+                <option value="prores">Apple ProRes 422 HQ (.epr bundled)</option>
+                <option value="h264">H.264 Master 40 Mbps (.epr bundled)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Library root</label>
+              <div class="row"><input type="text" id="nsRoot" readonly><button class="btn sm" id="nsBrowse">Browse</button></div>
+            </div>
+          </div>
+          <label class="check mt8"><input type="checkbox" id="nsThumb" checked> Render interactive PNG thumbnail</label>
+          <label class="check"><input type="checkbox" id="nsProjCopy" checked> Bundle a copy of the .prproj</label>
+          <div class="prog mt8" id="nsProg" style="display:none"><div></div></div>
+          <div class="stat-line" id="nsStat">Ready. Default high-quality EPR is bundled — zero config required.</div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">Backup Library</div>
+          <div class="list" id="nsList"><div class="empty">No backups yet.</div></div>
+          <div class="row mt8">
+            <button class="btn sm" id="nsRefresh">Refresh</button>
+            <button class="btn sm" id="nsRestore">Restore at playhead</button>
+            <button class="btn sm" id="nsReveal">Reveal in Explorer/Finder</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= 6. ASSETS LIBRARY ======================= -->
+      <section class="view" id="view-assets">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Responsive Local Assets Library</h1>
+          <p>Drag-and-drop media browser for local images, videos, audio, MOGRTs, SRT files and LUTs — with categories, keyword search and one-click import.</p>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <input type="text" id="asRoot" placeholder="Library root folder…" style="flex:1" readonly>
+            <button class="btn sm" id="asBrowse">Browse</button>
+            <button class="btn sm primary" id="asScan">Scan</button>
+          </div>
+          <div class="row mt8">
+            <input type="text" id="asSearch" placeholder="&#128269; Search keywords…" style="flex:1">
+            <select id="asAction" style="width:auto">
+              <option value="bin">Import to active bin</option>
+              <option value="playhead">Insert at playhead</option>
+            </select>
+          </div>
+          <div class="row mt8" id="asCats"></div>
+        </div>
+
+        <div class="assets-grid" id="asGrid"></div>
+        <div class="note mt8"><b>Smart installs:</b> .mogrt &#8594; Essential Graphics folder &middot; .cube/.3dl &#8594; Lumetri LUTs &middot; .srt &#8594; captions-ready import &middot; media &#8594; bin or timeline.</div>
+      </section>
+
+      <!-- ======================= 7. TRUE DUP ======================= -->
+      <section class="view" id="view-truedup">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>True Dup — Nest Cloning</h1>
+          <p>Bypass Premiere's native limitation: clone a nested sequence into a fully isolated, independent duplicate with a unique sequence ID — and update the timeline clips in place.</p>
+        </div>
+
+        <div class="card">
+          <div class="field">
+            <label>Clone name suffix</label>
+            <input type="text" id="tdSuffix" value="_CLONE">
+          </div>
+          <label class="check mt8"><input type="checkbox" id="tdAll" checked> Process every selected nested clip (leave off to clone just the first)</label>
+          <button class="btn primary block mt8" id="tdGo"><span class="spin"></span>&#128101; Clone &amp; Replace In Place</button>
+          <div class="stat-line" id="tdStat">Select one or more nested-sequence clips in the timeline, then clone.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">How True Dup works</div>
+          <div class="kv">
+            <span class="k">1</span><span class="v">Reads the nested sequence behind each selected clip</span>
+            <span class="k">2</span><span class="v">Duplicates it into an independent sequence (unique sequenceID)</span>
+            <span class="k">3</span><span class="v">Replaces the timeline clip in place — same start/end/in/out &amp; track</span>
+            <span class="k">4</span><span class="v">The original nest stays untouched for other usages</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= 8. TIMELINE TOOLS ======================= -->
+      <section class="view" id="view-tools">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Timeline Shortcut Tools</h1>
+          <p>Smart adjustment layers, staircase stagger, freeze-frame export and a QC scanner that flags blank frames, audio silence and offline media with color-coded markers.</p>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Smart Adjustment Layers</div>
+          <div class="row">
+            <button class="btn flex1" id="tlAdjPer">+1 per clip</button>
+            <button class="btn flex1" id="tlAdjSpan">Span selection (Alt)</button>
+            <button class="btn sm" id="tlAdjAdopt">Adopt template…</button>
+          </div>
+          <div class="stat-line" id="tlAdjStat">Needs a one-time "Adjustment Layer" template item in the project.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Staircase Stagger</div>
+          <div class="row">
+            <button class="btn flex1" id="tlStairUp">&#11014; Stair Up</button>
+            <button class="btn flex1" id="tlStairDown">&#11015; Stair Down</button>
+          </div>
+          <div class="grid2 mt8">
+            <div class="field"><label>Offset per clip (frames)</label><input type="number" id="tlStairN" value="12" min="1"></div>
+            <div class="field"><label>Track shift per clip</label><input type="number" id="tlStairT" value="1" min="0" max="4"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Freeze Frame Export</div>
+          <div class="row">
+            <button class="btn primary flex1" id="tlFreeze">&#10052; Export Still at Playhead</button>
+            <button class="btn sm" id="tlFreezeReveal">Reveal folder</button>
+          </div>
+          <div class="stat-line">Saved to <b>Documents/SocialYantra/Freeze</b> via the multi-tier QE frame-capture ladder.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Timeline QC Checker</div>
+          <div class="row">
+            <span class="chip on" data-qc="gaps">Blank frames</span>
+            <span class="chip on" data-qc="offline">Offline media</span>
+            <span class="chip on" data-qc="silence">Audio silence</span>
+            <span class="flex1"></span>
+            <button class="btn sm primary" id="tlQcGo">Scan timeline</button>
+          </div>
+          <label class="check mt8"><input type="checkbox" id="tlQcMarkers" checked> Drop color-coded QC markers</label>
+          <div class="list mt8" id="tlQcList" style="max-height:200px"><div class="empty">No scan yet.</div></div>
+        </div>
+      </section>
+
+      <!-- ======================= 9. WHISPER MODELS ======================= -->
+      <section class="view" id="view-models">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Whisper AI Models</h1>
+          <p>Download local Whisper (ggml) models to any custom location you choose, then point your local whisper.cpp runtime at them. Fully offline — no cloud fees, absolute privacy.</p>
+        </div>
+
+        <div class="card">
+          <div class="field">
+            <label>Download location (custom — your choice)</label>
+            <div class="row">
+              <input type="text" id="mdDir" placeholder="e.g. D:/AI-Models/whisper">
+              <button class="btn sm" id="mdBrowse">Browse…</button>
+            </div>
+          </div>
+          <div class="stat-line"><span class="tag info">tip</span> Keep models on a fast SSD. Large models need RAM &#8805; file size.</div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">Available Models</div>
+          <div class="list" id="mdList"></div>
+        </div>
+
+        <div class="card" id="mdActiveCard" style="display:none">
+          <div class="row">
+            <span class="tag ok">downloading</span>
+            <span class="flex1" id="mdActiveName"></span>
+            <button class="btn sm danger" id="mdCancel">Cancel</button>
+          </div>
+          <div class="prog mt8" id="mdProg"><div></div></div>
+          <div class="stat-line" id="mdActiveStat"></div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Local Runtime (whisper.cpp)</div>
+          <div class="field">
+            <label>Mode</label>
+            <select id="whMode">
+              <option value="server">Local server (OpenAI-compatible endpoint)</option>
+              <option value="cli">whisper.cpp / whisper-cli binary</option>
+              <option value="off">Disabled</option>
+            </select>
+          </div>
+          <div class="field mt8" id="whServerRow">
+            <label>Server endpoint</label>
+            <input type="text" id="whEndpoint" placeholder="http://127.0.0.1:8080">
+          </div>
+          <div id="whCliRows" style="display:none">
+            <div class="field mt8">
+              <label>CLI binary path (whisper-cli / main)</label>
+              <div class="row"><input type="text" id="whCli" placeholder="/opt/whisper.cpp/build/bin/whisper-cli"><button class="btn sm" id="whCliBrowse">Browse…</button></div>
+            </div>
+            <div class="field mt8">
+              <label>Model for CLI runs (.ggml.bin)</label>
+              <div class="row"><input type="text" id="whModel" placeholder="custom location you downloaded to"><button class="btn sm" id="whModelBrowse">Browse…</button></div>
+            </div>
+          </div>
+          <div class="row mt8">
+            <button class="btn sm" id="whTest">Test transcription engine</button>
+            <button class="btn sm" id="whHelp">&#63; Setup help</button>
+          </div>
+          <div class="stat-line" id="whStat">Not tested yet.</div>
+        </div>
+      </section>
+
+      <!-- ======================= 10. SETTINGS ======================= -->
+      <section class="view" id="view-settings">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Settings &amp; Diagnostics</h1>
+          <p>Engine paths, environment report and maintenance for the Social Yantra Powerhouse Panel.</p>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Environment</div>
+          <div class="kv" id="stEnv"></div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Audio Engine (local VAD + extraction)</div>
+          <div class="field">
+            <label>FFmpeg binary</label>
+            <div class="row"><input type="text" id="stFfmpeg" placeholder="auto-detect (PATH)"><button class="btn sm" id="stFfmpegBrowse">Browse…</button></div>
+          </div>
+          <div class="row mt8">
+            <button class="btn sm" id="stFfmpegTest">Detect &amp; test</button>
+            <span class="tag muted" id="stFfmpegTag">untested</span>
+          </div>
+          <div class="note mt8">FFmpeg powers silence analysis, audio extraction for Whisper and freeze-frame post-processing. It stays 100% local — nothing leaves your machine.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Data Locations</div>
+          <div class="kv" id="stPaths"></div>
+          <div class="row mt8">
+            <button class="btn sm" id="stOpenDocs">Open SocialYantra folder</button>
+            <button class="btn sm" id="stOpenLogs">Open log</button>
+            <button class="btn sm danger" id="stReset">Reset settings</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="kv">
+            <span class="k">Panel</span><span class="v">Social Yantra Powerhouse Panel v1.0.0</span>
+            <span class="k">Architecture</span><span class="v">Adobe CEP + ExtendScript + Node.js sidecar</span>
+            <span class="k">Privacy</span><span class="v">All AI analysis runs locally (VAD + Whisper)</span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <div id="logbar" title="Toggle log console">
+      <span>&#9002;&#9002;</span><span>Activity log</span><span class="flex1"></span><span id="logCount">0 events</span>
+    </div>
+    <div id="logview"></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="js/CSInterface.js"></script>
+<script src="js/core/bridge.js"></script>
+<script src="js/core/audio-vad.js"></script>
+<script src="js/core/whisper.js"></script>
+<script src="js/core/downloader.js"></script>
+<script src="js/core/demo.js"></script>
+<script src="js/modules/silence.js"></script>
+<script src="js/modules/filler.js"></script>
+<script src="js/modules/flow.js"></script>
+<script src="js/modules/wordpop.js"></script>
+<script src="js/modules/nest.js"></script>
+<script src="js/modules/assets.js"></script>
+<script src="js/modules/truedup.js"></script>
+<script src="js/modules/tools.js"></script>
+<script src="js/modules/models.js"></script>
+<script src="js/modules/settings.js"></script>
+<script src="js/core/app.js"></script>
+</body>
+</html>

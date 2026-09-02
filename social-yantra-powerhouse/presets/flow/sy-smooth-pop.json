@@ -1,0 +1,5 @@
+{
+  "name": "SY Smooth Pop",
+  "model": "bezier",
+  "params": { "x1": 0.34, "y1": 0.02, "x2": 0.64, "y2": 1.0 }
+}

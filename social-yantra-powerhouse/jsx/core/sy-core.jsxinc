@@ -1,0 +1,439 @@
+/* ==========================================================================
+ * Social Yantra Powerhouse — JSX core: JSON, time, timeline engine
+ * ExtendScript (ES3/ES5) — loaded automatically via manifest ScriptPath.
+ * ========================================================================== */
+
+/* ------------------------------ tiny JSON ------------------------------ */
+SY.stringify = function (v) {
+  var t = typeof v;
+  if (v === null || t === 'undefined') { return 'null'; }
+  if (t === 'number') { return isFinite(v) ? String(v) : 'null'; }
+  if (t === 'boolean') { return v ? 'true' : 'false'; }
+  if (t === 'string') {
+    var out = '"';
+    for (var i = 0; i < v.length; i++) {
+      var c = v.charAt(i), code = v.charCodeAt(i);
+      if (c === '"') { out += '\\"'; }
+      else if (c === '\\') { out += '\\\\'; }
+      else if (c === '\n') { out += '\\n'; }
+      else if (c === '\r') { out += '\\r'; }
+      else if (c === '\t') { out += '\\t'; }
+      else if (code < 32) { var h = code.toString(16); while (h.length < 4) { h = '0' + h; } out += '\\u' + h; }
+      else { out += c; }
+    }
+    return out + '"';
+  }
+  if (v instanceof Array) {
+    var a = [];
+    for (var j = 0; j < v.length; j++) { a.push(SY.stringify(v[j])); }
+    return '[' + a.join(',') + ']';
+  }
+  var o = [];
+  for (var k in v) { if (v.hasOwnProperty(k)) { o.push(SY.stringify(k) + ':' + SY.stringify(v[k])); } }
+  return '{' + o.join(',') + '}';
+};
+SY.parse = function (str) {
+  if (!str) { return null; }
+  str = String(str);
+  if (str.length > 2000000) { throw new Error('JSON too large'); }
+  return eval('(' + str + ')');
+};
+
+/* ------------------------------ logging ------------------------------ */
+SY.logs = [];
+SY.jsxLog = function (msg) {
+  SY.logs.push('[' + new Date().toTimeString().slice(0, 8) + '] ' + msg);
+  if (SY.logs.length > 400) { SY.logs.shift(); }
+  try {
+    var f = new File(Folder.myDocuments.fsName + '/SocialYantra/logs/jsx-log.txt');
+    var d = f.parent;
+    if (!d.exists) { d.create(); }
+    f.open('a'); f.encoding = 'UTF-8';
+    f.writeln(String(msg)); f.close();
+  } catch (e) { /* logging must never throw */ }
+  return true;
+};
+SY.getLogs = function () { return { ok: true, data: SY.logs }; };
+SY.takeLogs = function () { var l = SY.logs; SY.logs = []; return { ok: true, data: l }; };
+
+/* ------------------------------ RPC entry ------------------------------ */
+SY.evalJson = function (fnName, argJson) {
+  var out;
+  try {
+    if (typeof SY[fnName] !== 'function') { throw new Error('Unknown JSX function: ' + fnName); }
+    var arg = null;
+    if (argJson && argJson !== 'null' && argJson !== '') { arg = SY.parse(argJson); }
+    var r = SY[fnName](arg);
+    if (r && r.ok !== undefined) { out = r; } else { out = { ok: true, data: r }; }
+  } catch (e) {
+    out = { ok: false, error: String((e && e.message) ? e.message : e) };
+    SY.jsxLog('ERROR ' + fnName + ': ' + out.error);
+  }
+  if (SY.logs.length) { out.logs = SY.logs.slice(-30); SY.logs = []; }
+  return SY.stringify(out);
+};
+
+/* ------------------------------ time helpers ------------------------------ */
+SY.TICKS = 254016000000; // ticks per second
+SY.seconds = function (s) { var t = new Time(); t.seconds = s; return t; };
+SY.t2s = function (t) { return t && t.seconds !== undefined ? t.seconds : 0; };
+SY.ticksToSeconds = function (ticks) { return (parseFloat(ticks) || 0) / SY.TICKS; };
+
+/* ------------------------------ sequence access ------------------------------ */
+SY.enableQE = function () { try { app.enableQE(); } catch (e) {} };
+SY.enableQE();
+
+SY.getSeq = function () {
+  var s = app.project && app.project.activeSequence;
+  if (!s) { throw new Error('No active sequence. Open a sequence in the timeline.'); }
+  return s;
+};
+SY.getQeSeq = function () {
+  SY.enableQE();
+  var q = qe.project.getActiveSequence();
+  if (!q) { throw new Error('QE sequence unavailable.'); }
+  return q;
+};
+SY.seqInfo = function () {
+  var s = SY.getSeq();
+  return {
+    name: s.name,
+    sequenceID: s.sequenceID,
+    fps: SY.fpsOf(s),
+    width: s.frameSizeHorizontal,
+    height: s.frameSizeVertical,
+    duration: SY.ticksToSeconds(s.end),
+    playerPosition: SY.playerSeconds(s),
+    numVideoTracks: s.videoTracks.numTracks,
+    numAudioTracks: s.audioTracks.numTracks
+  };
+};
+SY.fpsOf = function (seq) {
+  try {
+    var fr = seq.getSettings().videoFrameRate; // Time whose seconds = frame duration
+    if (fr && fr.seconds && fr.seconds > 0) { return 1 / fr.seconds; }
+  } catch (e) {}
+  return 25;
+};
+SY.frameDur = function (seq) { return 1 / SY.fpsOf(seq); };
+SY.tcOf = function (seq, seconds) {
+  // QE razor()/move() expect a formatted timecode string.
+  var t = SY.seconds(seconds);
+  try {
+    var st = seq.getSettings();
+    return t.getFormatted(st.videoFrameRate, st.videoDisplayFormat);
+  } catch (e) {}
+  var fps = Math.round(SY.fpsOf(seq));
+  var fr = Math.floor((seconds - Math.floor(seconds)) * fps);
+  var h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = Math.floor(seconds % 60);
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  return p2(h) + ':' + p2(m) + ':' + p2(s) + ':' + p2(fr);
+};
+SY.playerSeconds = function (seq) {
+  seq = seq || SY.getSeq();
+  try { return SY.ticksToSeconds(seq.getPlayerPosition().ticks); } catch (e) { return 0; }
+};
+SY.setPlayer = function (seconds) {
+  var seq = SY.getSeq();
+  try { seq.setPlayerPosition(String(Math.round(seconds * SY.TICKS))); return true; } catch (e) { return false; }
+};
+
+/* ------------------------------ clip snapshot ------------------------------ */
+SY.trackLocked = function (track) { try { return track.isLocked(); } catch (e) { return false; } };
+
+SY.clipInfo = function (clip, trackType, trackIndex) {
+  var info = {
+    name: clip.name,
+    trackType: trackType,
+    trackIndex: trackIndex,
+    start: SY.t2s(clip.start),
+    end: SY.t2s(clip.end),
+    inPoint: SY.t2s(clip.inPoint),
+    outPoint: SY.t2s(clip.outPoint),
+    mediaType: clip.mediaType || '',
+    selected: false,
+    mediaPath: '',
+    isAdjustment: false,
+    hasVideo: false, hasAudio: false
+  };
+  try { info.selected = clip.isSelected(); } catch (e) {}
+  try { info.isAdjustment = clip.isAdjustmentLayer(); } catch (e) {}
+  try {
+    if (clip.projectItem) {
+      info.hasVideo = clip.projectItem.hasVideo();
+      info.hasAudio = clip.projectItem.hasAudio();
+      info.isSequenceItem = clip.projectItem.isSequence();
+      try { info.mediaPath = clip.projectItem.getMediaPath() || ''; } catch (e2) { info.mediaPath = ''; }
+      info.offline = !info.mediaPath && !info.isSequenceItem;
+    }
+  } catch (e) {}
+  return info;
+};
+
+SY.getClips = function (arg) {
+  var seq = SY.getSeq();
+  var selOnly = arg && arg.selectedOnly;
+  var out = [];
+  var i, j, c;
+  for (i = 0; i < seq.videoTracks.numTracks; i++) {
+    var vt = seq.videoTracks[i];
+    if (SY.trackLocked(vt)) { continue; }
+    for (j = 0; j < SY.colCount(vt.clips); j++) {
+      c = SY.clipAt(vt, j);
+      var inf = SY.clipInfo(c, 'video', i);
+      if (!selOnly || inf.selected) { out.push(inf); }
+    }
+  }
+  for (i = 0; i < seq.audioTracks.numTracks; i++) {
+    var at = seq.audioTracks[i];
+    if (SY.trackLocked(at)) { continue; }
+    for (j = 0; j < SY.colCount(at.clips); j++) {
+      c = SY.clipAt(at, j);
+      var inf2 = SY.clipInfo(c, 'audio', i);
+      if (!selOnly || inf2.selected) { out.push(inf2); }
+    }
+  }
+  return { ok: true, data: out };
+};
+
+SY.getSelection = function () {
+  var r = SY.getClips({ selectedOnly: true });
+  return r;
+};
+
+/* ------------------------------ razor + ripple delete engine ------------------------------ */
+SY.razorAt = function (seconds, opts) {
+  var seq = SY.getSeq(), qeSeq = SY.getQeSeq();
+  var tc = SY.tcOf(seq, seconds);
+  var cut = [];
+  var i;
+  var videoTracks = (opts && opts.videoTracks) || null; // optional array of indexes
+  var audioTracks = (opts && opts.audioTracks) || null;
+  for (i = 0; i < qeSeq.numVideoTracks; i++) {
+    if (videoTracks && !SY.inArray(videoTracks, i)) { continue; }
+    try { qeSeq.getVideoTrackAt(i).razor(tc); cut.push('v' + i); } catch (e) {}
+  }
+  for (i = 0; i < qeSeq.numAudioTracks; i++) {
+    if (audioTracks && !SY.inArray(audioTracks, i)) { continue; }
+    try { qeSeq.getAudioTrackAt(i).razor(tc); cut.push('a' + i); } catch (e) {}
+  }
+  return cut;
+};
+
+SY.colCount = function (col) {
+  if (!col) { return 0; }
+  if (typeof col.length === 'number' && !(col instanceof Array) && col.length > 0) { return col.length; }
+  if (col instanceof Array) { return col.length; }
+  if (typeof col.numItems === 'number') { return col.numItems; }
+  if (typeof col.numTracks === 'number') { return col.numTracks; }
+  if (typeof col.count === 'function') { try { return col.count(); } catch (e) {} }
+  return 0;
+};
+SY.clipAt = function (track, idx) { try { return track.clips[idx]; } catch (e) { return null; } };
+SY.clipAt2 = function (clipsCollection, idx) { try { return clipsCollection[idx]; } catch (e) { return null; } };
+
+SY.inArray = function (arr, v) {
+  for (var i = 0; i < arr.length; i++) { if (arr[i] === v) { return true; } }
+  return false;
+};
+
+/* Find clips fully inside [a,b] on unlocked tracks; delete them. */
+SY.deleteRange = function (arg) {
+  // arg: { start, end, mode:'ripple'|'lift' }
+  var seq = SY.getSeq();
+  var ripple = !arg.mode || arg.mode === 'ripple';
+  var eps = 0.001;
+  var removed = 0, errors = [];
+
+  // razor boundaries (frame-aligned seconds supplied by panel)
+  try { SY.razorAt(arg.start, null); } catch (e) { errors.push('razor@start: ' + e.message); }
+  try { SY.razorAt(arg.end, null); } catch (e) { errors.push('razor@end: ' + e.message); }
+
+  function sweep() {
+    var victims = [];
+    var i, j;
+    for (i = 0; i < seq.videoTracks.numTracks; i++) {
+      var vt = seq.videoTracks[i];
+      if (SY.trackLocked(vt)) { continue; }
+      for (j = 0; j < SY.colCount(vt.clips); j++) {
+        var c = SY.clipAt(vt, j);
+        if (SY.t2s(c.start) >= arg.start - eps && SY.t2s(c.end) <= arg.end + eps) { victims.push(c); }
+      }
+    }
+    for (i = 0; i < seq.audioTracks.numTracks; i++) {
+      var at = seq.audioTracks[i];
+      if (SY.trackLocked(at)) { continue; }
+      for (j = 0; j < SY.colCount(at.clips); j++) {
+        var a = SY.clipAt(at, j);
+        if (SY.t2s(a.start) >= arg.start - eps && SY.t2s(a.end) <= arg.end + eps) { victims.push(a); }
+      }
+    }
+    return victims;
+  }
+
+  var guard = 0;
+  while (guard++ < 6) {
+    var victims = sweep();
+    if (!victims.length) { break; }
+    // delete last-to-first so earlier indexes stay valid
+    victims.sort(function (x, y) { return SY.t2s(y.start) - SY.t2s(x.start); });
+    var deletedAny = false;
+    for (var k = 0; k < victims.length; k++) {
+      var v = victims[k];
+      var ok = false;
+      var attempts = ripple
+        ? [[true, true], [true, false], [true]]
+        : [[false, false], [false]];
+      for (var a2 = 0; a2 < attempts.length && !ok; a2++) {
+        try { v.remove(attempts[a2][0], attempts[a2][1]); ok = true; } catch (e2) {
+          try { if (attempts[a2].length === 1) { v.remove(attempts[a2][0]); ok = true; } } catch (e3) {}
+        }
+      }
+      if (ok) { removed++; deletedAny = true; }
+      else { errors.push('could not remove clip ' + v.name); }
+    }
+    if (!deletedAny) { break; }
+  }
+  return { removed: removed, errors: errors };
+};
+
+/* Multi-range cut: regions sorted desc so ripple shifts never invalidate times. */
+SY.applyCuts = function (arg) {
+  // arg: { cuts:[{start,end}], mode:'ripple'|'lift', previewOnly:bool, markerPrefix:string }
+  var seq = SY.getSeq();
+  var cuts = (arg && arg.cuts) || [];
+  if (!cuts.length) { return { ok: true, data: { applied: 0, note: 'nothing to cut' } }; };
+
+  if (arg.previewOnly) {
+    var m = 0;
+    for (var i = 0; i < cuts.length; i++) {
+      try { SY.addMarker(cuts[i].start, (arg.markerPrefix || 'SY') + ' ' + (i + 1), 'cut ' + cuts[i].start.toFixed(2) + '–' + cuts[i].end.toFixed(2)); m++; } catch (e) {}
+    }
+    return { ok: true, data: { applied: 0, markers: m, note: 'preview markers added' } };
+  }
+
+  cuts = cuts.slice().sort(function (x, y) { return y.start - x.start; });
+  var totalRemoved = 0, allErrors = [], saved = 0;
+  for (var c = 0; c < cuts.length; c++) {
+    var r = SY.deleteRange({ start: cuts[c].start, end: cuts[c].end, mode: arg.mode });
+    totalRemoved += r.removed;
+    allErrors = allErrors.concat(r.errors);
+    saved += (cuts[c].end - cuts[c].start);
+  }
+  return { ok: allErrors.length ? false : true, data: { applied: cuts.length, clipsRemoved: totalRemoved, secondsSaved: saved }, error: allErrors.length ? allErrors.slice(0, 5).join('; ') : undefined };
+};
+
+/* ------------------------------ markers ------------------------------ */
+SY.addMarker = function (seconds, name, comment, type) {
+  var seq = SY.getSeq();
+  var mk = seq.markers.createMarker(seconds);
+  if (mk) {
+    try { mk.name = name; } catch (e) {}
+    try { mk.comments = comment || ''; } catch (e) {}
+    if (type) { try { mk.type = type; } catch (e) {} }
+  }
+  return !!mk;
+};
+
+/* ------------------------------ insert helpers ------------------------------ */
+SY.insertAtPlayhead = function (arg) {
+  // arg: { path, binWanted:true }  — import + insert/overwrite
+  var seq = SY.getSeq();
+  var item = SY.importMedia(arg.path, arg.binName || 'Social Yantra');
+  if (!item) { throw new Error('Import failed: ' + arg.path); }
+  var t = SY.seconds(SY.playerSeconds(seq));
+  var ok = false;
+  try { ok = seq.overwriteClip(item, t, Math.max(seq.videoTracks.numTracks - 1, 0), Math.max(seq.audioTracks.numTracks - 1, 0)); } catch (e) { ok = false; }
+  if (!ok) { try { ok = seq.overwriteClip(item, t); } catch (e2) { ok = false; } }
+  if (!ok) { try { ok = seq.insertClip(item, t, -1, -1); } catch (e3) { ok = false; } }
+  return { ok: ok, item: item ? item.name : '' };
+};
+
+SY.importMedia = function (path, binName) {
+  if (!path) { return null; }
+  var targetBin = null;
+  if (binName) {
+    targetBin = SY.findOrCreateBin(binName);
+  }
+  var before = SY.countItems();
+  var ok = false;
+  try { ok = app.project.importFiles([path], true, targetBin, false); } catch (e) { ok = false; }
+  if (!ok) { try { ok = app.project.importFiles([path], true); } catch (e2) { ok = false; } }
+  if (!ok) { return null; }
+  var item = SY.findItemByPath(path, before);
+  return item;
+};
+
+SY.countItems = function () {
+  var n = 0;
+  function walk(collection) {
+    for (var i = 0; i < collection.numItems; i++) { n++; var it = collection[i]; if (it.type === ProjectItemType.BIN && it.children) { walk(it.children); } }
+  }
+  try { walk(app.project.rootItem.children); } catch (e) {}
+  return n;
+};
+
+SY.findItemByPath = function (path, hints) {
+  var found = null;
+  var baseName = path.replace(/^.*[\\\/]/, '');
+  function walk(collection) {
+    if (found) { return; }
+    for (var i = 0; i < collection.numItems; i++) {
+      var it = collection[i];
+      if (found) { return; }
+      var mp = '';
+      try { mp = it.getMediaPath ? (it.getMediaPath() || '') : ''; } catch (e) {}
+      if (mp && mp.toLowerCase() === String(path).toLowerCase()) { found = it; return; }
+      if (it.type === ProjectItemType.BIN && it.children) { walk(it.children); }
+    }
+  }
+  try { walk(app.project.rootItem.children); } catch (e) {}
+  if (!found) { // fall back to newest item with matching name
+    found = SY.findItemByName(baseName);
+  }
+  return found;
+};
+
+SY.findItemByName = function (name) {
+  var found = null;
+  function walk(collection) {
+    if (found) { return; }
+    for (var i = 0; i < collection.numItems; i++) {
+      var it = collection[i];
+      if (found) { return; }
+      if (it.name === name) { found = it; return; }
+      if (it.type === ProjectItemType.BIN && it.children) { walk(it.children); }
+    }
+  }
+  try { walk(app.project.rootItem.children); } catch (e) {}
+  return found;
+};
+
+SY.findOrCreateBin = function (name) {
+  var existing = null;
+  function walk(collection) {
+    if (existing) { return; }
+    for (var i = 0; i < collection.numItems; i++) {
+      var it = collection[i];
+      if (it.type === ProjectItemType.BIN && it.name === name) { existing = it; return; }
+      if (it.type === ProjectItemType.BIN && it.children) { walk(it.children); }
+    }
+  }
+  try { walk(app.project.rootItem.children); } catch (e) {}
+  if (!existing) {
+    try { existing = app.project.createBin(name); } catch (e2) { existing = app.project.rootItem; }
+  }
+  return existing;
+};
+
+/* ------------------------------ project info ------------------------------ */
+SY.getProjectInfo = function () {
+  var p = app.project;
+  return {
+    name: p.name,
+    path: p.path,
+    activeSequence: p.activeSequence ? p.activeSequence.name : ''
+  };
+};
+
+SY.jsxLog('SY core ready');

@@ -1,0 +1,143 @@
+/* ==========================================================================
+ * Feature 5 — Nest Saver: premium backup engine
+ * Bundles: high-quality EPR export (ProRes 422 HQ default), PNG thumbnail,
+ * .prproj copy + meta.json manifest, and tick-accurate cross-project restore.
+ * ========================================================================== */
+
+SY.ensureFolder = function (dirFsName) {
+  var f = new Folder(dirFsName);
+  if (!f.exists) { f.create(); }
+  return f.exists;
+};
+
+SY.nestBackup = function (arg) {
+  // arg: { eprPath, videoPath, thumbPath, projPath, metaPath, presetName }
+  var seq = SY.getSeq();
+  var out = { video: '', thumb: '', projectCopy: '', meta: '', exportMethod: '', warnings: [] };
+
+  /* 1) high-quality export (AME ladder: exportAsMediaDirect → encoder.encodeSequence) */
+  if (arg.videoPath && arg.eprPath) {
+    var okVid = false;
+    try { seq.exportAsMediaDirect(arg.videoPath, arg.eprPath); okVid = true; out.exportMethod = 'exportAsMediaDirect (Adobe Media Encoder queue)'; }
+    catch (e1) {
+      try {
+        app.encoder.launchEncoder();
+        var jobId = app.encoder.encodeSequence(seq, arg.videoPath, arg.eprPath, 0, 1);
+        okVid = !!jobId; out.exportMethod = 'encoder.encodeSequence job ' + jobId;
+      } catch (e2) { out.warnings.push('export failed: ' + (e2.message || e2)); }
+    }
+    if (okVid) { out.video = arg.videoPath; }
+    else if (!out.warnings.length) { out.warnings.push('Export could not be started — is Adobe Media Encoder installed?'); }
+  }
+
+  /* 2) interactive PNG thumbnail (frame at playhead, QE capture ladder) */
+  if (arg.thumbPath) {
+    var gotThumb = SY.captureFrame(arg.thumbPath);
+    if (gotThumb) { out.thumb = arg.thumbPath; }
+    else { out.warnings.push('thumbnail capture failed'); }
+  }
+
+  /* 3) bundled .prproj copy */
+  if (arg.projPath) {
+    var okProj = false;
+    try { app.project.saveAsCopy ? null : null; } catch (e0) {}
+    try { app.project.saveAsCopy(arg.projPath); okProj = true; } catch (e3) {
+      try { qe.project.saveProjectAs ? qe.project.saveProjectAs(arg.projPath) : null; okProj = true; } catch (e4) { okProj = false; }
+    }
+    if (okProj) { out.projectCopy = arg.projPath; }
+    else { out.warnings.push('project copy failed'); }
+  }
+
+  /* 4) manifest */
+  if (arg.metaPath) {
+    try {
+      var mf = new File(arg.metaPath);
+      mf.open('w'); mf.encoding = 'UTF-8';
+      mf.write(SY.stringify({
+        name: seq.name, sequenceID: seq.sequenceID,
+        fps: SY.fpsOf(seq), width: seq.frameSizeHorizontal, height: seq.frameSizeVertical,
+        duration: SY.ticksToSeconds(seq.end), created: new Date().toString(),
+        preset: arg.presetName || '', exportMethod: out.exportMethod
+      }));
+      mf.close();
+      out.meta = arg.metaPath;
+    } catch (e5) { out.warnings.push('meta write failed'); }
+  }
+
+  return { ok: true, data: out };
+};
+
+/* Multi-tier QE frame-capture ladder (also used by Freeze Frame tool). */
+SY.captureFrame = function (pngPath) {
+  SY.enableQE();
+  var q = null;
+  try { q = SY.getQeSeq(); } catch (e) { return false; }
+  var f = new File(pngPath);
+  var attempts = [
+    function () { q.exportFramePNG(pngPath); },
+    function () { q.exportFrameAsPNG(pngPath); },
+    function () { var seq = SY.getSeq(); q.exportFrameAsPNG(SY.tcOf(seq, SY.playerSeconds(seq)), pngPath); },
+    function () { var seq = SY.getSeq(); q.exportFramePNG(SY.tcOf(seq, SY.playerSeconds(seq)), pngPath); }
+  ];
+  for (var i = 0; i < attempts.length; i++) {
+    try { attempts[i](); } catch (e) {}
+    try { if (f.exists && f.length > 0) { return true; } } catch (e2) {}
+  }
+  return false;
+};
+
+/* Cross-project restore: import backup .prproj (or media) and place the nest
+ * at the current playhead position — tick-accurate. */
+SY.nestRestore = function (arg) {
+  // arg: { prprojPath, videoPath, itemName, mode:'sequence'|'video' }
+  var seq = SY.getSeq();
+  var bin = SY.findOrCreateBin('NestSaver Restore');
+  var pos = SY.playerSeconds(seq);
+  var t = SY.seconds(pos);
+
+  if (arg.mode === 'video' && arg.videoPath) {
+    var item = SY.importMedia(arg.videoPath, 'NestSaver Restore');
+    if (!item) { return { ok: false, error: 'Could not import backup media.' }; }
+    var okV = false;
+    try { okV = seq.overwriteClip(item, t); } catch (e) { okV = false; }
+    return { ok: okV, data: { placedAt: pos.toFixed(3) + 's' }, error: okV ? undefined : 'overwrite failed' };
+  }
+
+  if (!arg.prprojPath) { return { ok: false, error: 'No .prproj bundle in this backup.' }; }
+  var pf = new File(arg.prprojPath);
+  if (!pf.exists) { return { ok: false, error: 'Backup project missing: ' + arg.prprojPath }; }
+
+  var okImp = false;
+  try { okImp = app.project.importFiles([arg.prprojPath], true, bin, false); } catch (e1) {
+    try { okImp = app.project.importFiles([arg.prprojPath], true); } catch (e2) { okImp = false; }
+  }
+  if (!okImp) { return { ok: false, error: 'Import of backup project failed.' }; }
+
+  var target = arg.itemName ? SY.findItemByName(arg.itemName) : null;
+  if (!target) {
+    // newest sequence in the restore bin
+    target = SY.newestSequenceInBin(bin, arg.itemName || '');
+  }
+  if (!target) { return { ok: false, error: 'Sequence "' + (arg.itemName || '') + '" not found after import — check the NestSaver Restore bin.' }; }
+
+  var ok = false;
+  try { ok = seq.insertClip(target, t, Math.max(seq.videoTracks.numTracks - 1, 0), Math.max(seq.audioTracks.numTracks - 1, 0)); }
+  catch (e3) { ok = false; }
+  if (!ok) { try { ok = seq.overwriteClip(target, t); } catch (e4) { ok = false; } }
+  return { ok: ok, data: { placedAt: pos.toFixed(3) + 's', item: target.name }, error: ok ? undefined : 'Placement failed.' };
+};
+
+SY.newestSequenceInBin = function (bin, nameFilter) {
+  var newest = null;
+  function walk(collection) {
+    for (var i = 0; i < collection.numItems; i++) {
+      var it = collection[i];
+      var isSeq = false;
+      try { isSeq = it.isSequence && it.isSequence(); } catch (e) { isSeq = false; }
+      if (isSeq && (!nameFilter || it.name.indexOf(nameFilter) !== -1)) { newest = it; }
+      if (it.type === ProjectItemType.BIN && it.children) { walk(it.children); }
+    }
+  }
+  try { walk(bin ? bin.children : app.project.rootItem.children); } catch (e) {}
+  return newest;
+};
