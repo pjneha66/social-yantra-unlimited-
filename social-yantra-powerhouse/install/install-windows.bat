@@ -90,8 +90,6 @@ for %%v in (9 10 11 12) do (
   ) else (
     echo   CSXS.%%v PlayerDebugMode = 1  [ok]
   )
-  REM Also try DWORD form for strict checkers
-  reg add "HKCU\Software\Adobe\CSXS.%%v" /v PlayerDebugMode /t REG_DWORD /d 1 /f >nul 2>&1
 )
 
 REM Unblock files (Windows marks downloaded files as blocked)
