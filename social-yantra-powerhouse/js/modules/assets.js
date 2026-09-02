@@ -149,8 +149,9 @@ window.AssetsMod = (function (SY) {
   function installLut(it) {
     if (!SY.hasNode) { SY.toast('Demo mode — LUT install needs the panel', 'warn'); return; }
     var path = SY.require('path'), fs = SY.require('fs');
+    var commonFiles = SY.env.COMMONPROGRAMFILES;
     var candidates = SY.os === 'win'
-      ? [path.join(process.env.COMMONPROGRAMFILES, 'Adobe', 'Common', 'LUTs', 'Creative')]
+      ? (commonFiles ? [path.join(commonFiles, 'Adobe', 'Common', 'LUTs', 'Creative')] : [])
       : ['/Library/Application Support/Adobe/Common/LUTs/Creative', path.join(SY.home, 'Library', 'Application Support', 'Adobe', 'Common', 'LUTs', 'Creative')];
     for (var i = 0; i < candidates.length; i++) {
       try {

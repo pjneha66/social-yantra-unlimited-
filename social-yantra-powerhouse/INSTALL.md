@@ -108,7 +108,7 @@ It checks all 8 common failure modes (wrong folder, bad manifest XML, missing Pl
    - Premiere caches extensions at startup. Close window is not quit. Use `File > Exit` / `Premiere Pro > Quit`.
 
 4. **Is Premiere new enough?**
-   - Premiere Pro 15.0+ (CC 2021) minimum for this manifest. Recommended 23.0+ (CC 2023/2024/2025).
+   - Premiere Pro 14.0+ (CC 2020) minimum for this manifest. Recommended 23.0+ (CC 2023/2024/2025).
 
 5. **Quarantine / blocked files?**
    - macOS ZIP download → `xattr -dr com.apple.quarantine ...`

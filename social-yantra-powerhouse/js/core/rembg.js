@@ -30,7 +30,7 @@ window.SYRembg = (function (SY) {
   R.modelDir = function () {
     if (!SY.hasNode) { return ''; }
     try {
-      if (process.env && process.env.U2NET_HOME) { return process.env.U2NET_HOME; }
+      if (SY.env.U2NET_HOME) { return SY.env.U2NET_HOME; }
       return SY.require('path').join(SY.require('os').homedir(), '.u2net');
     } catch (e) { return ''; }
   };
@@ -68,7 +68,7 @@ window.SYRembg = (function (SY) {
       if (home) {
         list.push({ bin: SY.require('path').join(home, '.local', 'bin', 'rembg'), args: [], label: '~/.local/bin' });
         if (SY.os === 'win') {
-          var appdata = process.env && process.env.APPDATA;
+          var appdata = SY.env.APPDATA;
           if (appdata) { list.push({ bin: SY.require('path').join(appdata, 'Python', 'Scripts', 'rembg.exe'), args: [], label: 'AppData Scripts' }); }
         }
       }

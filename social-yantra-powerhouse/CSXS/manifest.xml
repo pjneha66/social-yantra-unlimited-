@@ -10,7 +10,9 @@
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
-      <Host Name="PPRO" Version="[15.0,99.9]"/>
+      <!-- Premiere Pro 2020 is version 14.0. Keep this aligned with the
+           documented minimum so CEP does not silently hide the panel. -->
+      <Host Name="PPRO" Version="[14.0,99.9]"/>
     </HostList>
     <LocaleList>
       <Locale Code="All"/>
