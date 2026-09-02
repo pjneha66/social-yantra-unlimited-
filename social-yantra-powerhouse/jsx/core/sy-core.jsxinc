@@ -78,6 +78,17 @@ SY.TICKS = 254016000000; // ticks per second
 SY.seconds = function (s) { var t = new Time(); t.seconds = s; return t; };
 SY.t2s = function (t) { return t && t.seconds !== undefined ? t.seconds : 0; };
 SY.ticksToSeconds = function (ticks) { return (parseFloat(ticks) || 0) / SY.TICKS; };
+/* Sequence length. `seq.end` is a ticks string on most builds but a Time
+ * object on others — handle both so durations are never silently 0. */
+SY.seqDuration = function (seq) {
+  seq = seq || SY.getSeq();
+  try {
+    var e = seq.end;
+    if (e && e.seconds !== undefined) { return SY.t2s(e); }
+    if (e !== undefined && e !== null) { return SY.ticksToSeconds(e); }
+  } catch (err) {}
+  return 0;
+};
 
 /* ------------------------------ sequence access ------------------------------ */
 SY.enableQE = function () { try { app.enableQE(); } catch (e) {} };
@@ -324,15 +335,22 @@ SY.applyCuts = function (arg) {
 };
 
 /* ------------------------------ markers ------------------------------ */
+/* Marker.type is read-only — colour/kind is set through setTypeAs*(). */
 SY.addMarker = function (seconds, name, comment, type) {
   var seq = SY.getSeq();
   var mk = seq.markers.createMarker(seconds);
-  if (mk) {
-    try { mk.name = name; } catch (e) {}
-    try { mk.comments = comment || ''; } catch (e) {}
-    if (type) { try { mk.type = type; } catch (e) {} }
+  if (!mk) { return false; }
+  try { mk.name = name; } catch (e) {}
+  try { mk.comments = comment || ''; } catch (e) {}
+  if (type) {
+    var kind = String(type).toLowerCase();
+    var done = false;
+    if (/chapter/.test(kind)) { try { mk.setTypeAsChapter(); done = true; } catch (e1) {} }
+    else if (/segment/.test(kind)) { try { mk.setTypeAsSegmentation(); done = true; } catch (e2) {} }
+    else if (/comment/.test(kind)) { try { mk.setTypeAsComment(); done = true; } catch (e3) {} }
+    if (!done) { try { mk.type = type; } catch (e4) {} }
   }
-  return !!mk;
+  return true;
 };
 
 /* ------------------------------ insert helpers ------------------------------ */

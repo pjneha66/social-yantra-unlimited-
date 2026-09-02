@@ -1,143 +1,227 @@
-# ⚡ Social Yantra Powerhouse Panel
+# Social Yantra Powerhouse
 
-**Bridge the gap between creative ideation, automation, and timeline execution — inside Adobe Premiere Pro.**
+A CEP panel for **Adobe Premiere Pro 2023+** that edits long-form and short-form
+social video at speed — and then does the music, chapters and multilingual work
+on top of it. It combines a native-speed timeline engine (ExtendScript) with
+ffmpeg for media I/O and whisper.cpp for transcription.
 
-A seamlessly synced, feature-packed CEP panel engineered to eliminate classic editing and motion-graphics bottlenecks. Everything runs **locally** on your machine — no cloud fees, absolute privacy.
+## What it does
 
-| | |
-|---|---|
-| Panel name | **Social Yantra Powerhouse Panel** |
-| Platform | Adobe Premiere Pro 2020 → 2025+ (CEP 9–12) |
-| Architecture | CEP panel (HTML/JS) + ExtendScript host + local Node engine |
-| Privacy | 100% on-device. VAD + Whisper AI run locally. |
+1. **Silence / dead-air cutter** — VAD scan, gap list, ripple delete in one shot.
+2. **Filler-word cleaner** — Whisper transcription with word timestamps, find
+   *um / uh / like / you know* (+ your own list) and ripple them out.
+3. **Chapters & markers** — turn a transcript, a QC scan, silence gaps or
+   existing markers into YouTube chapters; export CSV / YouTube description /
+   SRT / JSON / FCP XML or push them into Premiere as markers.
+4. **Music auto-ducking** — dip the music track wherever dialogue happens, with
+   real volume keyframes, attack/release ramps and an envelope you can preview.
+5. **Beat-cut editor** — onset/energy beat detection on the music clip, snap
+   cuts to the grid, cut every *N* beats, or turn bars into chapters.
+6. **Flow engine** — staircase / jump-cut editor over the silence gaps: punch-in
+   and punch-back with optional zoom, speed-ramp (time remap) or plain cuts.
+7. **WordPop** — karaoke captions: SRT / JSON / PNG / burned-in, with templates.
+8. **Sequence-in-Sequence (nesting)** — split, wrap in a nested sequence, or
+   lift a range out into its own sequence.
+9. **Media manager** — list assets, find used/unused media, relink offlines,
+   batch transcode, proxy workflow.
+10. **True duplicate detector** — find genuinely repeated media (not just same
+    filename) and replace them with one shared clip.
+11. **Timeline tools** — markers, QC scan (offline / blank / audio-less / long
+    gaps), freeze frame, staircase baker, one-click chapters from the QC scan.
+12. **Model manager** — download whisper models to **any folder you choose**,
+    verify them, relocate, see disk usage.
+13. **Settings** — paths, VAD thresholds, defaults, export folder, diagnostics,
+    full backup/restore of the settings JSON.
 
----
+**Languages:** Auto-detect · English · हिन्दी · **Hinglish** (code-mixed, with a
+Hindi filler dictionary that also matches the Devanagari spelling of *yaar*,
+*matlab*, *achha*…).
 
-## ✨ Full Feature Capabilities
+The left rail is **grouped and searchable** — Cut, Music, Language, Media,
+System — and the type-ahead box dims the tabs that don't match.
 
-### 1. AI Silence Cut & Voice Activity Detection — *Cut the Silence, Keep the Pace*
-- **Advanced VAD** analyzes your sequence's audio waveforms (via a local ffmpeg PCM engine), detects dead space and performs **frame-accurate ripple cuts**.
-- **Smart AV Linking** — auto-detects audio-video relationships using **media paths + source timing**, safely handles detached audio and re-links cut segments across the timeline.
-- **Progressive Disclosure UI** — threshold, minimum duration and padding tucked into a *Fine Tune* accordion; detected gaps listed dynamically with per-gap checkboxes, scan stats and seconds-saved projection.
+## Tabs at a glance
 
-### 2. FireCut-style Filler Word & Repetition Cleanup
-- **Local Whisper AI** — transcribes clip audio locally with **millisecond-level word timestamps**. No cloud fees, absolute privacy.
-- **Smart Filler Matching** — instantly targets stutters, repeat phrases and common fillers (*um, uh, like, you know, i mean…*), plus your own custom dictionary.
-- **Seamless Ripple Cuts** — non-overlapping frame-accurate razor cuts keep the sequence fully synchronized.
+| Group | Tab | View | Needs |
+|---|---|---|---|
+| Cut | Silence Cutter | `#view-silence` | — |
+| Cut | Filler Cleaner | `#view-filler` | whisper (server or CLI) |
+| Cut | Flow Engine | `#view-flow` | — |
+| Cut | WordPop | `#view-wordpop` | ffmpeg (for burn-in) |
+| Music | Ducking | `#view-duck` | — |
+| Music | Beat Cut | `#view-beat` | — |
+| Music | Chapters & Markers | `#view-chapters` | — |
+| Language | — | `#view-filler` (Language card) | whisper |
+| Media | Nesting | `#view-nest` | — |
+| Media | Media Manager | `#view-assets` | ffmpeg (transcode) |
+| Media | True Duplicate | `#view-truedup` | — |
+| System | Tools | `#view-tools` | — |
+| System | Models | `#view-models` | — |
+| System | Settings | `#view-settings` | — |
 
-### 3. Interactive Graph Editor 2.0 — *The Flow Tab*
-- **Premium Curve Suite**: 6 interactive math models — **Bezier (draggable handles), Spline, Elastic, Bounce, Wave, Steps**.
-- **Infinite Custom Presets** — Base Eases, *My Curves* (saved), and *Local Folder* preset libraries (`presets/flow/*.json`).
-- **Adaptive Greedy-Fit Baking** — Premiere's ExtendScript lacks bezier keyframe handles, so Social Yantra uses a **Douglas–Peucker greedy-fit polyline reduction** to bake the smoothest possible curve into the fewest keyframes.
-- **Anti-Overshoot Safety** — spatial properties (Position, Anchor Point) are value-clamped to the from→to envelope and frame bounds so clips never fly off-screen.
+## Quick start
 
-### 4. Automated Word-Pop Captions & Subtitles
-- **Dynamic entrance scaling** — word-by-word pop baked as snapping scale/opacity curves on a selected clip.
-- **Native Lanes** — generated subtitles are injected into a **real Premiere caption track** (`createCaptionTrack`, PPro 24.x+) for absolute styling control.
-- **Caption Hold Logic** — each word holds on-screen until the next word starts, capped at **0.8s**, preventing flicker during conversational gaps.
+### Silence Cutter
+1. Open the sequence with the rough cut on it.
+2. Pick the **audio track** to analyse (or *All audio tracks*).
+3. Click **Scan** → gaps appear with their lengths.
+4. Untick anything you want to keep (or press **Select all** / **Invert**).
+5. **Cut** → ripple delete.
 
-### 5. Nest Saver — Premium Backup Engine
-- **1-click secure backups** of nested sequences / the active sequence into a structured, dated library.
-- **Default High-Quality EPR** — a bundled **Apple ProRes 422 HQ** export preset (plus an H.264 Master fallback) — zero config.
-- **Interactive Thumbnails** — automatic PNG capture so you browse backups visually.
-- **Cross-Project Importing** — restore any backup into the current project at **tick-accurate playhead positions** (bundles a `.prproj` copy).
+### Filler Cleaner
+1. Choose a **whisper backend** in Settings (server or CLI + model).
+2. Pick the audio track and the **language** (Auto / English / हिन्दी / Hinglish).
+3. **Transcribe** — the panel decodes that track to WAV via ffmpeg and runs whisper.
+4. Tick the fillers to remove (they are pre-ticked) → **Cut**.
+5. Optional: **Copy transcript** or **Save .srt/.json**, and **Send to Chapters**.
 
-### 6. Responsive Local Assets Library
-- Media browser for local **images, videos, audio, MOGRTs, SRT files and LUTs**.
-- **Smart installs**: `.mogrt` → placed at playhead / Essential Graphics; `.cube/.3dl` → Lumetri LUTs folder; `.srt` → captions-ready import; media → bin **or** timeline.
-- Categories (sub-folders), keyword search, thumbnails, one-click import.
+> **Hinglish tip:** Hinglish needs a multilingual model (`ggml-base.bin` or
+> bigger — not a `.en.bin`); the panel warns you if you picked an English-only
+> one. The prompt tells Whisper the audio is code-mixed, which measurably
+> improves Hindi+English output.
 
-### 7. True Dup — Nest Cloning
-- Bypasses Premiere's native limitation: **1-click fully isolated nest duplicates** with unique sequence IDs — original in/out points and track placement preserved, timeline clips replaced **in place**.
+### Chapters & Markers
+1. Load chapters from a **transcript**, the **QC scan**, **silence gaps** or the
+   **existing markers**.
+2. Tune the grouping (pause length, max words, max duration), the title style
+   and the "chapters must start at 00:00" / minimum-length rules.
+3. **Export** as CSV, YouTube description, SRT, JSON, FCP XML or DaVinci — or
+   **Add as Premiere markers** (Chapter markers) and **Reveal**.
+4. The sanity report tells you when YouTube would ignore the list.
 
-### 8. Dedicated Timeline Shortcut Tools
-- **Smart Adjustment Layers** — one per clip, or a single span over the whole selection (the "Alt" mode).
-- **Staircase Stagger** — Stair Up / Stair Down shifts clips diagonally across time (and tracks, where the QE DOM allows).
-- **Freeze Frame Export** — stills at the playhead via a **multi-tier QE frame-capture ladder** → `Documents/SocialYantra/Freeze`.
-- **Timeline QC Checker** — scans for blank frames, offline media and silent holes, dropping color-coded QC markers.
+### Ducking
+1. **Scan** the sequence (or reuse the silence-scan / transcript result) to build
+   the speech mask, or **Guess** from the timeline if you have no VAD yet.
+2. **Pick the music track** (the panel pre-selects the track that is *not* your
+   dialogue track).
+3. Set duck depth, attack, release, hold and the un-ducked base level.
+4. **Preview envelope** shows the gain curve over the timeline before you commit.
+5. **Apply keyframes** writes Volume › Level keys on the music clip(s) — smooth
+   ramps, not jumps. **Clear** removes them again.
 
-### ⬇ Whisper AI Models (with **custom download location**)
-Download local ggml Whisper models (tiny → large-v3 / turbo) **to any folder you choose** — progress, cancel and size verification included — then wire them to the bundled runtimes:
+### Beat Cut
+1. Pick the **music clip** and **Analyze** (FFT spectral-flux onset detection,
+   tempo autocorrelation with octave correction and sub-hop interpolation).
+2. The BPM, beat count, bar count and a waveform/beat overlay are shown;
+   alternative tempos are one click away if the detector locked onto half-time.
+3. Choose **cut mode** (razor / markers / chapters), **every N beats**, a
+   minimum gap, a target track set and an optional time range.
+4. **Cut** razors the grid; **Markers** stamps the beats; **Chapters** sends the
+   bars to the Chapters tab.
 
-| Mode | How |
-|---|---|
-| **Local server** (recommended) | `whisper-server -m ggml-base.bin --port 8080` (or LM Studio / LocalAI) → endpoint `http://127.0.0.1:8080` |
-| **whisper.cpp CLI** | point the panel at your `whisper-cli`/`main` binary + the model you downloaded |
+> Beat snapping is on by default: grid points move to the nearest real transient
+> so cuts land on the kick, not 30 ms early.
 
----
+### Flow Engine
+Pick the gaps to process, set punch-in %, hold-out %, zoom amount and speed, then
+**Apply cuts**, **Bake staircase** or **Speed ramp**.
 
-## 🚀 Install
+### WordPop
+Transcribe (or paste an SRT), pick a template, export SRT / JSON / PNG strip, or
+**Burn in** with ffmpeg.
 
-1. **Windows**: run `install/install-windows.bat` · **macOS**: run `install/install-macos.sh`
-2. Restart Premiere Pro → **Window ‹ Extensions ‹ Social Yantra Powerhouse Panel**
-3. *(Optional but recommended)* install **ffmpeg** so silence detection is one-click — the panel auto-detects it on PATH, or set the path in **Settings**.
+### Nesting
+**Split at playhead**, **Wrap selection in nest**, or **Lift range to new
+sequence** — pick tracks, keep the handles, get a nested clip back.
 
-Full details, unsigned-panel (PlayerDebugMode) notes and troubleshooting: **[`social-yantra-powerhouse/INSTALL.md`](social-yantra-powerhouse/INSTALL.md)**
+### Media Manager
+**List assets** → relink offlines, batch transcode (preset), create proxies, or
+delete unused media (moves to the trash folder first).
 
-> The panel also opens in **any browser** without Premiere — a full demo mode with mock data lets you explore the UI before installing.
+### True Duplicate
+Scan for repeated media by size+duration+name, then **replace all** with a single
+shared clip.
 
----
+### Tools
+Markers (add / jump / clear), **QC scan** (offline, blank frames, no audio, long
+gaps — with **Chapters from QC**), freeze-frame ladder, staircase baker.
 
-## 🧭 Quick Start (per tab)
+### Models
+Pick a model, **choose the destination folder** (defaults to
+`settings.whisperModelDir`), **Download**, then **Verify**. Existing models can
+be relocated to a new folder. Disk usage for the current folder is shown.
 
-| Tab | Flow |
-|---|---|
-| Silence Cutter | Open sequence → *Detect Silence* → review gaps → *Ripple Cut* (or Preview = markers) |
-| Filler Remover | Configure Whisper (Models tab) → *Transcribe & Find Fillers* → tick detections → *Ripple Cut* |
-| Flow | Pick a curve (drag Bezier handles) → choose property/range → *Bake Curve to Keyframes* |
-| Word Pop | *Transcribe for Captions* (or import SRT / paste) → *Create Native Caption Track* |
-| Nest Saver | Select nest → *Backup* → restore later at playhead |
-| Assets | Set library folder → *Scan* → click an asset to import/insert |
-| True Dup | Select nested clip(s) → *Clone & Replace In Place* |
-| Tools | Adjustment layers · staircase · freeze frame · QC scan |
-| Models | Choose custom folder → download a model → set runtime mode → *Test* |
+### Settings
+Set paths (`root`, `models`, `exports`, `temp`, `ffmpeg`), VAD thresholds,
+defaults, the export folder and diagnostics; export/import a full settings
+backup.
 
----
+## Requirements
 
-## 🔒 Data & Privacy
+- Adobe Premiere Pro 2023 or newer (CEP panels enabled)
+- Node.js **inside the panel** (CEP `node` integration) or the optional Node
+  sidecar for ffmpeg/whisper work
+- ffmpeg on PATH (or set `settings.ffmpegPath`)
+- whisper.cpp CLI **or** a whisper-server (`whisper-server` / `main` with
+  `--server`) for transcription
+- For Hinglish / Hindi: a **multilingual** whisper model
 
-Everything is stored locally:
+## Install
+
+1. Drop `social-yantra-powerhouse/` into your CEP extensions folder, e.g.
+   - macOS: `~/Library/Application Support/Adobe/CEP/extensions/`
+   - Windows: `C:\Program Files (x86)\Common Files\Adobe\CEP\extensions\`
+2. Enable unsigned panels (PlayerDebugMode) or sign the extension.
+3. Launch Premiere, **Window › Extensions › Social Yantra Powerhouse**.
+4. Set your paths in the Settings tab.
+
+## Architecture
 
 ```
-Documents/SocialYantra/
-├── settings.json      # panel settings mirror
-├── logs/jsx-log.txt   # host-script log
-├── Freeze/            # exported stills
-├── NestSaver/         # backup library (changeable)
-├── WhisperModels/     # default model dir (you choose ANY custom location)
-├── AssetsLibrary/     # default assets root (changeable)
-└── temp/              # wav/srt intermediates
+index.html + css/app.css        panel shell (grouped nav + search)
+js/core/bridge.js               window.SY  (settings, fs, RPC, ffmpeg, utils)
+js/core/app.js                  SYUI: view routing, nav search, module init
+js/core/audio-vad.js            SYAudio: decode, energy VAD, speech masks
+js/core/duck.js                 SYDuck: speech → volume envelope + keyframes
+js/core/beat.js                 SYBeat: FFT onset envelope, tempo, beat grid
+js/core/chapters.js             SYChapters: transcript/QC → chapters + exports
+js/core/lang.js                 SYLang: language packs, Hinglish filler dict
+js/core/whisper.js              SYWhisper: server + CLI transcription, JSON/SRT
+js/core/downloader.js           SYDownloader: model download/verify/relocate
+js/core/flow|wordpop|nest|assets|truedup|tools.js
+js/modules/*.js                 one file per tab (UI logic only)
+jsx/social-yantra.jsx           ExtendScript entry: evalJson dispatch
+jsx/core/sy-core.jsxinc         timecode maths, sequence/clip/marker helpers
+jsx/features/sy-*.jsxinc        ExtendScript engines (silence, flow, tools,
+                                nest, wordpop, truedup, assets, audio)
 ```
 
-Audio analysis (ffmpeg) and transcription (whisper.cpp) run on-device; the only network calls the panel can make are to **`127.0.0.1`** (your own Whisper server) and **huggingface.co** (only when you click *Download* on a model).
+**Panel ↔ Premiere:** every timeline operation goes through
+`SY.call(fn, arg, cb)` → `SY.evalJson("fn", argJson)` in ExtendScript, returning
+`{ok:true,data}` or `{ok:false,error}`. Nothing in the panel talks to Premiere
+directly.
 
----
+**Two details worth knowing:**
 
-## 🧪 Development
+- *Ducking units.* Premiere stores Volume › Level as a **linear** value with a
+  +15 offset (`dB → 10^((dB−15)/20)`), so −12 dB is `0.0794`, not `−0.12`. The
+  ducking engine detects the scale from the clip's current value and writes keys
+  in the right unit.
+- *Beat detection.* Onset detection uses a spectral-flux envelope (1024-point
+  FFT, 50 % overlap, log-magnitude, gamma compression, low-cut emphasis). Tempo
+  comes from autocorrelation of that envelope with a BPM prior, octave
+  correction and **parabolic interpolation of the correlation peak** — one FFT
+  hop is 32 ms, and 120 BPM is 15.625 hops, so without sub-hop refinement the
+  grid drifts ~2 % over a few minutes.
+
+## Dev / test
+
+Headless tests run under Node with DOM and ExtendScript stubs:
 
 ```bash
 cd social-yantra-powerhouse
-node test/smoke.js      # panel UI boot + demo RPC round-trip
-node test/jsx-smoke.js  # ExtendScript engine vs a Premiere API stub (14 checks)
-node test/vad-smoke.js  # silence-detection math on synthetic PCM
+bash test/run-all.sh
 ```
 
-```
-social-yantra-powerhouse/
-├── CSXS/manifest.xml      # CEP manifest (PPRO 15.0–99.9, Node enabled)
-├── index.html             # 10-tab UI
-├── css/app.css            # premium dark theme
-├── js/core/               # bridge, VAD engine, Whisper client, model downloader, demo harness
-├── js/modules/            # one module per feature tab
-├── jsx/social-yantra.jsx  # ExtendScript host (auto-loaded) + jsx/ features
-├── presets/               # ProRes/H264 .epr + flow presets
-├── install/               # Windows / macOS installers
-└── test/                  # smoke & unit tests
-```
+| Suite | Covers |
+|---|---|
+| `test/smoke.js` | loads every core + module file against a DOM shim |
+| `test/jsx-smoke.js` | ExtendScript engines incl. ducking keyframes, beat razors, markers, timecode maths |
+| `test/vad-smoke.js` | VAD gap detection |
+| `test/duck-smoke.js` | speech envelope → dB keys, ramps, slicing, edge cases |
+| `test/beat-smoke.js` | FFT, onset envelope, 120 BPM grid accuracy, cut planning, clip mapping |
+| `test/chapters-smoke.js` | transcript/QC/marker → chapters, YouTube rules, CSV/SRT/JSON/marker export |
+| `test/lang-smoke.js` | language packs, Hinglish dictionary + Devanagari matching, whisper JSON/CLI flags |
 
-## ⚠ Notes & honest limits
-
-- **Captions** need Premiere Pro **24.x+** (the `createCaptionTrack` API). On older builds the SRT is still imported for manual placement.
-- **Nest export** enqueues through Adobe Media Encoder (ProRes requires AME with ProRes support).
-- The **QE DOM** (razor, frame capture, cross-track moves) is undocumented; the panel uses defensive multi-tier ladders and reports when a build refuses a tier.
-- Adjustment layers have no creation API — the panel adopts/duplicates a one-time template item (guided in-UI).
+There is no `package.json` — everything is plain ES5-compatible JS so it runs
+inside the CEP panel without a bundler.

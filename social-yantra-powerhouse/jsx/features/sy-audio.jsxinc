@@ -1,0 +1,307 @@
+/* ==========================================================================
+ * Feature 9 — Audio engine: music auto-ducking keyframes, beat razor points,
+ *             marker read/write.
+ * Ducking envelopes are computed in the panel (js/core/duck.js); this module
+ * writes them onto real Premiere audio clips as Volume › Level keyframes,
+ * handling Premiere's linear-stored / dB-displayed value scale.
+ * ========================================================================== */
+
+/* Premiere stores clip Volume › Level as a 0..1 float while the UI shows dB.
+ * Community-verified mapping: dB = 20*log10(v) + 15  ⇔  v = 10^((dB-15)/20). */
+SY.DB_OFFSET = 15;
+SY.dbToLinear = function (db) {
+  return Math.pow(10, (db - SY.DB_OFFSET) / 20);
+};
+SY.linearToDb = function (v) {
+  if (!v || v <= 0) { return -96; }
+  return 20 * (Math.log(v) * Math.LOG10E) + SY.DB_OFFSET;
+};
+
+/* ---------- audio track inventory ---------- */
+SY.getAudioTracks = function () {
+  var seq = SY.getSeq();
+  var tracks = [], sel = [];
+  for (var i = 0; i < seq.audioTracks.numTracks; i++) {
+    var at = seq.audioTracks[i];
+    var locked = SY.trackLocked(at);
+    var clips = [];
+    for (var j = 0; j < SY.colCount(at.clips); j++) {
+      var c = SY.clipAt(at, j);
+      if (!c) { continue; }
+      var inf = SY.clipInfo(c, 'audio', i);
+      inf.locked = locked;
+      if (!inf.mediaPath && !inf.isSequenceItem) { inf.detached = true; }
+      clips.push(inf);
+      if (inf.selected) { sel.push(inf); }
+    }
+    var nm = 'A' + (i + 1);
+    try { if (at.name) { nm = at.name; } } catch (e) {}
+    tracks.push({ index: i, label: 'A' + (i + 1), name: nm, locked: locked, clips: clips });
+  }
+  return { ok: true, data: { tracks: tracks, selection: sel, seq: { name: seq.name, fps: SY.fpsOf(seq), duration: SY.ticksToSeconds(seq.end) } } };
+};
+
+/* ---------- Volume › Level parameter lookup (defensive ladder) ---------- */
+SY.getVolumeParam = function (clip) {
+  var comps = null;
+  try { comps = clip.components; } catch (e) { return null; }
+  var n = SY.collectionLen(comps);
+  var volComp = null, i, j;
+  for (i = 0; i < n; i++) {
+    var c = comps[i];
+    if (c && /volume/i.test(String(c.displayName || ''))) { volComp = c; break; }
+  }
+  if (!volComp) {
+    // some builds expose "Audio" / "Clip Volume"; else fall back to the first
+    for (i = 0; i < n; i++) {
+      var c2 = comps[i];
+      if (c2 && /audio|clip/i.test(String(c2.displayName || ''))) { volComp = c2; break; }
+    }
+  }
+  if (!volComp && n > 0) { volComp = comps[0]; }
+  if (!volComp) { return null; }
+  var props = null;
+  try { props = volComp.properties; } catch (e2) { return null; }
+  var pn = SY.collectionLen(props);
+  var lvl = null;
+  for (j = 0; j < pn; j++) {
+    var p = props[j];
+    if (p && /^level$/i.test(String(p.displayName || p.name || ''))) { lvl = p; break; }
+  }
+  if (!lvl) {
+    for (j = 0; j < pn; j++) {
+      var p2 = props[j];
+      if (p2 && /level|volume/i.test(String(p2.displayName || p2.name || '')) && !/bypass/i.test(String(p2.displayName || ''))) { lvl = p2; break; }
+    }
+  }
+  if (!lvl) { return null; }
+  return { param: lvl, component: (volComp.displayName || 'Volume'), name: (lvl.displayName || lvl.name || 'Level') };
+};
+
+/* ---------- envelope helpers (mirrors js/core/duck.js) ---------- */
+SY.dbAtKeys = function (keys, t) {
+  if (!keys || !keys.length) { return 0; }
+  if (t <= keys[0].t) { return keys[0].db; }
+  var last = keys[keys.length - 1];
+  if (t >= last.t) { return last.db; }
+  for (var i = 1; i < keys.length; i++) {
+    if (t <= keys[i].t) {
+      var a = keys[i - 1], b = keys[i];
+      var span = b.t - a.t;
+      if (span <= 0.000001) { return b.db; }
+      return a.db + (b.db - a.db) * ((t - a.t) / span);
+    }
+  }
+  return last.db;
+};
+SY.sliceKeys = function (keys, t0, t1) {
+  var out = [];
+  var any = false;
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i].t >= t0 - 0.000001 && keys[i].t <= t1 + 0.000001) { out.push({ t: keys[i].t, db: keys[i].db }); any = true; }
+  }
+  out.unshift({ t: t0, db: SY.dbAtKeys(keys, t0) });
+  out.push({ t: t1, db: SY.dbAtKeys(keys, t1) });
+  out.sort(function (a, b) { return a.t - b.t; });
+  var dedup = [];
+  for (var k = 0; k < out.length; k++) {
+    var prev = dedup[dedup.length - 1];
+    if (prev && Math.abs(prev.t - out[k].t) < 0.0001) { continue; }
+    dedup.push(out[k]);
+  }
+  return { keys: dedup, touched: any };
+};
+
+/* ---------- Auto-Ducking writer ---------- */
+/*
+ * arg: {
+ *   tracks: [trackIndex…] | null (null = every unlocked audio track),
+ *   keys: [{t, db}]   envelope in sequence seconds / dB,
+ *   mode: 'keys' | 'markers' | 'clear',
+ *   baseDb: 0, duckDb: -12, markerPrefix: 'DUCK',
+ *   valueMode: 'auto' | 'db' | 'linear',
+ *   onlySelected: false
+ * }
+ */
+SY.duckTrack = function (arg) {
+  var seq = SY.getSeq();
+  if (!arg || !arg.tracks || !arg.tracks.length) {
+    var all = [];
+    for (var a = 0; a < seq.audioTracks.numTracks; a++) { all.push(a); }
+    arg.tracks = all;
+  }
+  var keys = arg.keys || [];
+  if (!keys.length && arg.mode !== 'clear') { return { ok: false, error: 'No ducking envelope supplied — detect dialogue first.' }; }
+  var fd = SY.frameDur(seq);
+  var t0 = keys.length ? keys[0].t : 0;
+  var t1 = keys.length ? keys[keys.length - 1].t : SY.seqDuration(seq);
+  var mode = arg.mode || 'keys';
+  var baseDb = (arg.baseDb !== undefined) ? arg.baseDb : 0;
+  var report = [], written = 0, skipped = 0, errors = [];
+
+  if (mode === 'markers') {
+    var mk = 0;
+    for (var m = 1; m < keys.length; m++) {
+      if (keys[m].db < baseDb - 0.5 && keys[m - 1].db >= baseDb - 0.5) {
+        try { SY.addMarker(keys[m].t, (arg.markerPrefix || 'DUCK') + ' ' + keys[m].db + 'dB', 'auto-duck under dialogue', 'Segment'); mk++; } catch (eMk) {}
+      }
+    }
+    return { ok: true, data: { markers: mk, mode: 'markers', note: 'Preview markers placed at each duck start.' } };
+  }
+
+  for (var ti = 0; ti < arg.tracks.length; ti++) {
+    var idx = arg.tracks[ti];
+    var at = null;
+    try { at = seq.audioTracks[idx]; } catch (eTr) { errors.push('track A' + (idx + 1) + ' missing'); continue; }
+    if (!at) { errors.push('track A' + (idx + 1) + ' missing'); continue; }
+    if (SY.trackLocked(at)) { errors.push('A' + (idx + 1) + ' is locked'); continue; }
+
+    for (var j = 0; j < SY.colCount(at.clips); j++) {
+      var clip = SY.clipAt(at, j);
+      if (!clip) { continue; }
+      var ci = SY.clipInfo(clip, 'audio', idx);
+      if (arg.onlySelected && !ci.selected) { continue; }
+      var cs = ci.start, ce = ci.end;
+      // "clear" always covers the whole clip; keyframing only where the envelope lives
+      if (mode !== 'clear' && (ce <= t0 || cs >= t1)) { continue; }
+
+      var vp = SY.getVolumeParam(clip);
+      if (!vp) { errors.push('"' + ci.name + '": no Volume › Level parameter'); skipped++; continue; }
+
+      if (mode === 'clear') {
+        try { vp.param.setTimeVarying(false, true); } catch (e1) { try { vp.param.setTimeVarying(false); } catch (e1b) {} }
+        try { vp.param.removeKeyRange(SY.seconds(cs), SY.seconds(ce)); } catch (e2) {}
+        try { vp.param.setValue(SY.dbToLinear(baseDb), true); } catch (e3) {
+          try { vp.param.setValue(baseDb, true); } catch (e4) {}
+        }
+        report.push('"' + ci.name + '": ducking cleared');
+        written++;
+        continue;
+      }
+
+      /* decide the value scale: read BEFORE making it time-varying */
+      var scale = 'db';
+      if (arg.valueMode === 'linear') { scale = 'linear'; }
+      else if (arg.valueMode === 'db') { scale = 'db'; }
+      else {
+        try {
+          var cur = vp.param.getValue();
+          if (typeof cur === 'number' && cur >= 0 && cur <= 1.5) { scale = 'linear'; }
+        } catch (eG) { scale = 'linear'; }
+      }
+
+      var sl = SY.sliceKeys(keys, Math.max(cs, t0), Math.min(ce, t1));
+      SY.prepParam(vp.param, cs, ce);
+      var ok = 0, bad = 0;
+      for (var k = 0; k < sl.keys.length; k++) {
+        var v = (scale === 'linear') ? SY.dbToLinear(sl.keys[k].db) : sl.keys[k].db;
+        if (SY.writeKey(vp.param, sl.keys[k].t, v)) { ok++; } else { bad++; }
+      }
+      written += ok;
+      report.push('"' + ci.name + '" (A' + (idx + 1) + '): ' + ok + ' keys' + (bad ? ' (' + bad + ' failed)' : '') + ' · ' + scale);
+      if (!ok) { errors.push('"' + ci.name + '": no keyframes accepted'); }
+    }
+  }
+
+  var note = '';
+  if (!written) { note = 'No audio clips on the target track(s) overlapped the dialogue.'; }
+  else if (errors.length) { note = errors.length + ' issue(s) — see log.'; }
+  return {
+    ok: written > 0,
+    data: { clips: report, keys: written, mode: mode, tracks: arg.tracks, baseDb: baseDb, note: note },
+    error: written ? undefined : (errors.length ? errors.slice(0, 4).join('; ') : note)
+  };
+};
+
+/* ---------- Beat / onset razor points ---------- */
+/* arg: { times:[sec], videoTracks:[i], audioTracks:[i], markers:bool, markerPrefix } */
+SY.razorPoints = function (arg) {
+  var seq = SY.getSeq();
+  var fd = SY.frameDur(seq);
+  var times = (arg && arg.times) || [];
+  if (!times.length) { return { ok: false, error: 'No cut points supplied.' }; }
+  var qeSeq = SY.getQeSeq();
+
+  /* frame-snap + dedupe */
+  var snapped = [], i;
+  for (i = 0; i < times.length; i++) {
+    var s = Math.round(times[i] / fd) * fd;
+    var dup = false;
+    for (var d = 0; d < snapped.length; d++) { if (Math.abs(snapped[d] - s) < fd * 0.5) { dup = true; break; } }
+    if (!dup && s > 0) { snapped.push(s); }
+  }
+  snapped.sort(function (x, y) { return x - y; });
+
+  if (arg && arg.markers) {
+    var mk = 0;
+    for (i = 0; i < snapped.length; i++) {
+      try { SY.addMarker(snapped[i], (arg.markerPrefix || 'BEAT') + ' ' + (i + 1), 'beat cut point', 'Segment'); mk++; } catch (e) {}
+    }
+    return { ok: true, data: { markers: mk, cuts: snapped.length, note: 'Beat markers placed (no cuts).' } };
+  }
+
+  var vTracks = (arg && arg.videoTracks) || null;
+  var aTracks = (arg && arg.audioTracks) || null;
+  var cuts = 0, trackErrors = [];
+  for (i = 0; i < snapped.length; i++) {
+    var tc = SY.tcOf(seq, snapped[i]);
+    var hit = 0;
+    for (var v = 0; v < qeSeq.numVideoTracks; v++) {
+      if (vTracks && !SY.inArray(vTracks, v)) { continue; }
+      try { qeSeq.getVideoTrackAt(v).razor(tc); hit++; } catch (e2) {}
+    }
+    for (var a2 = 0; a2 < qeSeq.numAudioTracks; a2++) {
+      if (aTracks && !SY.inArray(aTracks, a2)) { continue; }
+      try { qeSeq.getAudioTrackAt(a2).razor(tc); hit++; } catch (e3) {}
+    }
+    if (hit) { cuts++; } else { trackErrors.push('nothing to cut at ' + snapped[i].toFixed(2) + 's'); }
+  }
+  return {
+    ok: cuts > 0,
+    data: { cuts: cuts, points: snapped.length, note: trackErrors.length ? (trackErrors.length + ' point(s) hit no clip') : '' },
+    error: cuts ? undefined : 'Razor refused every point (tracks locked or QE unavailable on this build).'
+  };
+};
+
+/* ---------- Marker read / bulk write ---------- */
+SY.markerKind = function (mk) {
+  try { if (mk.type) { return String(mk.type); } } catch (e) {}
+  return 'Comment';
+};
+SY.getMarkers = function () {
+  var seq = SY.getSeq();
+  var out = [];
+  try {
+    var col = seq.markers;
+    if (!col) { return { ok: true, data: [] }; }
+    var guard = 0;
+    for (var m = col.getFirstMarker(); m !== undefined && m !== null && guard++ < 5000; m = col.getNextMarker(m)) {
+      var at = 0, until = 0;
+      try { at = SY.t2s(m.start); } catch (e1) { at = 0; }
+      try { until = SY.t2s(m.end); } catch (e2) { until = at; }
+      var nm = '', cm = '';
+      try { nm = m.name || ''; } catch (e3) {}
+      try { cm = m.comments || ''; } catch (e4) {}
+      var gd = '';
+      try { gd = m.guid || ''; } catch (e5) {}
+      out.push({ at: at, until: (until > at ? until : at), name: nm, comments: cm, type: SY.markerKind(m), guid: gd });
+    }
+  } catch (e) {
+    return { ok: false, error: 'Could not read markers: ' + e.message };
+  }
+  out.sort(function (a, b) { return a.at - b.at; });
+  return { ok: true, data: out };
+};
+
+/* arg: { markers:[{at,name,comments,type}], clearFirst:bool } */
+SY.addMarkers = function (arg) {
+  var list = (arg && arg.markers) || [];
+  if (!list.length) { return { ok: false, error: 'Nothing to add.' }; }
+  var added = 0;
+  for (var i = 0; i < list.length; i++) {
+    try {
+      if (SY.addMarker(list[i].at, list[i].name, list[i].comments, list[i].type)) { added++; }
+    } catch (e) {}
+  }
+  return { ok: added > 0, data: { added: added, total: list.length } };
+};
