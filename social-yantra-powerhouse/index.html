@@ -58,6 +58,16 @@
       <span class="tip"><b>True Dup — Nest Cloning</b><i>Timeline · isolated duplicates</i></span>
     </button>
 
+    <div class="nav-group" data-group="effects">Effects &amp; Layers</div>
+    <button class="nav-btn" data-view="quickfx" data-group="effects" data-words="quick effects warp stabilizer lumetri color gaussian blur drop shadow crop ultra key basic 3d corner pin directional blur black white custom effect preset prfpset" title="Quick Effects">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      <span class="tip"><b>Quick Effects</b><i>Effects · 10 one-click looks + custom</i></span>
+    </button>
+    <button class="nav-btn" data-view="layers" data-group="effects" data-words="layer tools text layer adjustment layer solid color matte colour picker move layer up down track stack" title="Layer Tools">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      <span class="tip"><b>Layer Tools</b><i>Effects · text / solid / adjustment</i></span>
+    </button>
+
     <div class="nav-group" data-group="library">Library</div>
     <button class="nav-btn" data-view="nest" data-group="library" data-words="nest saver backup export prores restore project" title="Nest Saver">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
@@ -66,6 +76,16 @@
     <button class="nav-btn" data-view="assets" data-group="library" data-words="assets library media mogrt lut srt import browse" title="Assets Library">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       <span class="tip"><b>Local Assets Library</b><i>Library · media, MOGRTs, LUTs</i></span>
+    </button>
+
+    <div class="nav-group" data-group="sources">Sources</div>
+    <button class="nav-btn" data-view="mediaget" data-group="sources" data-words="downloader youtube tiktok instagram pinterest yt-dlp mp3 m4a aac 1080p 720p 480p cookies fps merge ffmpeg download section" title="Downloader">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span class="tip"><b>Social Downloader</b><i>Sources · YouTube / TikTok / Insta / Pinterest</i></span>
+    </button>
+    <button class="nav-btn" data-view="aiimage" data-group="sources" data-words="ai image background remover rembg u2net u2netp isnet human segmentation cutout keyed still onnx" title="AI Image">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      <span class="tip"><b>AI Image — Background Remover</b><i>Sources · U2Net / ISNet, fully local</i></span>
     </button>
 
     <div class="nav-spacer"></div>
@@ -758,6 +778,79 @@
         </div>
 
         <div class="card">
+          <div class="section-head">Paste Image</div>
+          <div class="row">
+            <button class="btn primary flex1" id="tlPasteClip">&#128203; Paste from clipboard</button>
+            <button class="btn flex1" id="tlPasteFile">Choose file&#8230;</button>
+            <button class="btn flex1" id="tlPasteFreeze">Insert freeze frame</button>
+          </div>
+          <div class="field mt8">
+            <label>Still duration on the timeline <span class="hint">(seconds)</span></label>
+            <input type="number" id="tlPasteDur" value="5" min="0.2" step="0.5">
+          </div>
+          <div class="stat-line" id="tlPasteStat">Clipboard grabs work on Windows and macOS; the third button captures the frame under the playhead and drops it straight back on the timeline.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Sequence-in-Sequence</div>
+          <div class="row">
+            <input type="text" id="tlNestName" placeholder="nest name (optional)" style="flex:1">
+            <input type="number" id="tlNestHandles" value="0" min="0" max="120" step="1" style="width:76px" title="extra frames of handle kept at both ends">
+            <button class="btn primary flex1" id="tlNestGo"><span class="spin"></span>&#128230; Nest selection</button>
+          </div>
+          <label class="check mt8"><input type="checkbox" id="tlNestOpen"> Open the new sequence after nesting</label>
+          <div class="row mt8">
+            <input type="text" id="tlSepName" placeholder="separate sequence name" style="flex:1">
+            <button class="btn flex1" id="tlSepGo">&#128229; Nest separate</button>
+            <button class="btn flex1" id="tlUnnestGo">&#128228; Unnest selection</button>
+          </div>
+          <label class="check mt8"><input type="checkbox" id="tlSepOpen" checked> Open the separated sequence</label>
+          <div class="stat-line" id="tlNestStat"><b>Nest</b> wraps the selection in a new sequence and replaces it in place · <b>Nest separate</b> lifts it out and leaves the gap · <b>Unnest</b> lays a nest's contents back on the timeline.</div>
+          <div class="list mt8" id="tlSeqList" style="max-height:130px"><div class="empty">Sequences in this project appear here.</div></div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Flash Frame Detector <span class="mini">isolated bright / black frames</span></div>
+          <div class="row">
+            <button class="btn primary flex1" id="tlFlashGo"><span class="spin"></span>&#9889; Scan for flash frames</button>
+            <button class="btn flex1" id="tlEmptyGo"><span class="spin"></span>&#9723; Empty frame checker</button>
+          </div>
+          <div class="grid3 mt8">
+            <div class="field">
+              <label>Flash sensitivity <span class="hint">(&#916; luma)</span></label>
+              <input type="number" id="tlFlashTh" value="45" min="10" max="200" step="5">
+            </div>
+            <div class="field">
+              <label>Max frames in a flash</label>
+              <input type="number" id="tlFlashRun" value="2" min="1" max="12">
+            </div>
+            <div class="field">
+              <label>Limit per clip <span class="hint">(s, 0 = all)</span></label>
+              <input type="number" id="tlFrameLimit" value="0" min="0" step="5">
+            </div>
+          </div>
+          <div class="grid2 mt8">
+            <div class="field">
+              <label>Empty: shortest black span <span class="hint">(s)</span></label>
+              <input type="number" id="tlEmptyMin" value="0.08" min="0.04" step="0.04">
+            </div>
+            <div class="field">
+              <label>Empty: pixel brightness cap <span class="hint">(%)</span></label>
+              <input type="number" id="tlEmptyTh" value="10" min="1" max="40">
+            </div>
+          </div>
+          <label class="check mt8"><input type="checkbox" id="tlFrameSelOnly"> Only the clips I have selected</label>
+          <div class="prog mt8" id="tlFrameProg" style="display:none"><div></div></div>
+          <div class="list mt8" id="tlFrameList" style="max-height:190px"><div class="empty">No scan yet.</div></div>
+          <div class="row mt8">
+            <button class="btn sm" id="tlFrameMark" disabled>Mark all</button>
+            <button class="btn sm danger" id="tlFrameCut" disabled>Ripple-cut selected regions</button>
+            <button class="btn sm" id="tlFrameClear">Clear results</button>
+          </div>
+          <div class="stat-line" id="tlFrameStat">Flash uses per-frame mean luma (ffmpeg signalstats); empty uses blackdetect plus a structural hole scan.</div>
+        </div>
+
+        <div class="card">
           <div class="section-head">Timeline QC Checker</div>
           <div class="row">
             <span class="chip on" data-qc="gaps">Blank frames</span>
@@ -770,6 +863,332 @@
           <div class="list mt8" id="tlQcList" style="max-height:200px"><div class="empty">No scan yet.</div></div>
           <div class="row mt8">
             <button class="btn sm" id="tlQcToChapters" disabled>Send issues to Chapters &#8594;</button>
+            <button class="btn sm danger" id="tlQcClear" disabled><span class="spin"></span>&#128465; Clear QC</button>
+            <label class="check" style="margin-left:auto"><input type="checkbox" id="tlQcClearAll"> remove every marker</label>
+          </div>
+          <div class="stat-line">Clear QC wipes the result list and removes the QC markers the panel stamped from the ruler.</div>
+        </div>
+      </section>
+
+      <!-- ======================= 11b. QUICK EFFECTS ======================= -->
+      <section class="view" id="view-quickfx">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Quick Effects</h1>
+          <p>One click attaches a real Premiere effect to every selected clip — Warp Stabilizer, Lumetri, blur, shadow, crop, keying, 3D, corner pin — with its parameters already set. Custom effects and your own presets work too.</p>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Pick effects <span class="mini" id="fxCount">Pick one or more effects</span></div>
+          <div class="ease-pick" id="fxGrid"></div>
+          <div class="row mt8">
+            <button class="btn primary flex1" id="fxApply" disabled><span class="spin"></span>&#9889; Apply to selection</button>
+            <button class="btn" id="fxInspect">What's on my clip?</button>
+          </div>
+          <div class="stat-line" id="fxStat">Nothing queued — click the tiles above.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Add custom effect</div>
+          <div class="row">
+            <input type="text" id="fxCustom" placeholder="effect name exactly as it shows in the Effects panel" style="flex:1">
+            <button class="btn primary sm" id="fxAddCustom">Apply</button>
+          </div>
+          <div class="field mt8">
+            <label>Parameters <span class="hint">(Name=value, comma separated — written after the effect lands)</span></label>
+            <input type="text" id="fxCustomProps" placeholder="Blurriness=18, Repeat Edge Pixels=true">
+          </div>
+          <div class="stat-line">Use the list below for the exact spelling this Premiere build expects.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Add custom preset <span class="tag muted" id="fxListTag">not read yet</span></div>
+          <div class="row">
+            <input type="text" id="fxPresetPath" placeholder="path to a .prfpset" style="flex:1" readonly>
+            <button class="btn sm" id="fxPresetBrowse">Choose&#8230;</button>
+            <button class="btn sm" id="fxPresetScan">Scan folders</button>
+          </div>
+          <div class="row mt8">
+            <input type="text" id="fxPresetName" placeholder="preset name in the Effects panel" style="flex:1">
+            <button class="btn sm primary" id="fxPresetInstall">Install preset</button>
+            <button class="btn sm" id="fxPresetApply">Try apply</button>
+          </div>
+          <div class="list mt8" id="fxPresetList" style="max-height:150px"><div class="empty">Scan for the .prfpset files on this machine.</div></div>
+          <div class="stat-line" id="fxPresetStat">Premiere will not let a panel apply a .prfpset directly — <b>Install preset</b> copies it where Premiere reads it, then it appears in the Effects panel.</div>
+        </div>
+
+        <div class="acc" id="fxListAcc">
+          <div class="acc-head">&#128270; Every effect this build reports<span class="chev">&#9660;</span></div>
+          <div class="acc-body">
+            <div class="row"><button class="btn sm" id="fxRefreshList">Re-read the list</button></div>
+            <div class="list mt8" id="fxList" style="max-height:240px"><div class="empty">Reading&#8230;</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= 11c. LAYER TOOLS ======================= -->
+      <section class="view" id="view-layers">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Layer Tools</h1>
+          <p>Text, solid and adjustment layers on a fresh track above your selection — plus one-click moves up and down the video stack. Text and solids are rendered locally with ffmpeg, so no font or plug-in install is needed.</p>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Text layer</div>
+          <div class="field">
+            <label>Text <span class="hint">(new lines become stacked lines)</span></label>
+            <textarea id="lyText">YOUR TEXT</textarea>
+          </div>
+          <div class="grid3 mt8">
+            <div class="field"><label>Colour</label><input type="color" id="lyTextColor" value="#ffffff"></div>
+            <div class="field"><label>Size <span class="hint">(0 = auto)</span></label><input type="number" id="lyTextSize" value="0" min="0" step="4"></div>
+            <div class="field"><label>Outline width <span class="hint">(0 = off)</span></label><input type="number" id="lyTextOutline" value="0" min="0" step="1"></div>
+          </div>
+          <div class="field mt8">
+            <label>Font family <span class="hint">(any CSS stack the panel's Chromium knows — Devanagari included)</span></label>
+            <input type="text" id="lyTextFont" value='"Arial", "Helvetica Neue", "DejaVu Sans", sans-serif'>
+          </div>
+          <label class="check mt8"><input type="checkbox" id="lyTextShadow" checked> Drop shadow</label>
+          <div class="row mt8">
+            <button class="btn primary flex1" id="lyTextAdd"><span class="spin"></span>&#128172; Add text layer</button>
+            <button class="btn" id="lyTextPreview">Preview PNG</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Solid layer</div>
+          <div class="row">
+            <input type="color" id="lySolidColor" value="#7c5cff" style="width:64px;height:30px;padding:2px">
+            <input type="text" id="lySolidHex" value="#7c5cff" style="flex:1">
+            <span class="tag muted" id="lySwatchTag">pick a swatch</span>
+          </div>
+          <div class="row mt8" id="lySwatches"></div>
+          <div class="field mt8">
+            <label>Opacity</label>
+            <div class="range-line"><input type="range" id="lySolidAlpha" min="0" max="1" step="0.05" value="1"><span class="val" id="lySolidAlphaV">1.00</span></div>
+          </div>
+          <button class="btn primary block mt8" id="lySolidAdd"><span class="spin"></span>&#9632; Add solid layer</button>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Adjustment layer</div>
+          <div class="row">
+            <button class="btn flex1" id="lyAdjPer">+1 per clip</button>
+            <button class="btn flex1" id="lyAdjSpan">Span selection</button>
+            <button class="btn sm" id="lyAdjAdopt">Adopt template&#8230;</button>
+          </div>
+          <div class="stat-line">Needs a one-time <b>File &#8250; New &#8250; Adjustment Layer</b> in the project; Adopt finds it.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Move layer</div>
+          <div class="row">
+            <button class="btn flex1" id="lyUp"><span class="spin"></span>&#11014; Move up</button>
+            <button class="btn flex1" id="lyDown"><span class="spin"></span>&#11015; Move down</button>
+            <input type="number" id="lyAmount" value="1" min="1" max="8" style="width:64px" title="tracks per move">
+          </div>
+          <div class="list mt8" id="lyStack" style="max-height:170px"><div class="empty">Reading the track stack&#8230;</div></div>
+          <div class="row mt8">
+            <button class="btn sm" id="lyRefresh">&#8635; Rescan stack</button>
+            <span class="flex1"></span>
+            <span class="mini">new-layer length</span>
+            <input type="number" id="lyDuration" value="5" min="0.5" step="0.5" style="width:70px">
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Placement</div>
+          <div class="field">
+            <label>Where should the new layer go?</label>
+            <select id="lySpan">
+              <option value="span" selected>Span the selected clips</option>
+              <option value="playhead">From the playhead for N seconds</option>
+              <option value="full">Across the whole sequence</option>
+            </select>
+          </div>
+          <div class="stat-line" id="lyStat">Text is rasterised on the panel's own canvas (no ffmpeg needed); solids use ffmpeg's colour source. Renders land in <b>Documents/SocialYantra/Captures/layers</b> and import into a <i>Social Yantra Layers</i> bin.</div>
+        </div>
+      </section>
+
+      <!-- ======================= 11d. AI IMAGE ======================= -->
+      <section class="view" id="view-aiimage">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>AI Image — Background Remover</h1>
+          <p>Cut a person or product out of a frame with a local segmentation network (rembg + ONNX). No cloud, no upload, no per-image fee — the weights live in <code>~/.u2net</code> and inference runs on your machine.</p>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <span class="tag muted" id="aiStatus">checking&#8230;</span>
+            <span class="flex1"></span>
+            <button class="btn sm" id="aiCheck">Re-check</button>
+            <button class="btn sm primary" id="aiInstall">Install rembg</button>
+          </div>
+          <div class="stat-line" id="aiStat">Detecting the rembg CLI&#8230;</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Step 1 &#183; Input</div>
+          <div class="row">
+            <button class="btn primary flex1" id="aiClipFrame">&#127916; Selected clip input</button>
+            <button class="btn flex1" id="aiPickFile">&#128444; Image file input</button>
+          </div>
+          <div class="row mt8">
+            <input type="text" id="aiInput" placeholder="no input yet" style="flex:1" readonly>
+            <span class="mini" id="aiInputLabel"></span>
+          </div>
+          <div class="stat-line">Selected clip grabs the frame under the playhead as a PNG; image file takes any PNG / JPG / TIFF / WebP.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Step 2 &#183; Model <span class="tag muted" id="aiModelTag">&#8212;</span></div>
+          <div class="row" id="aiModels"></div>
+          <div class="stat-line" id="aiModelNote"></div>
+          <label class="check mt8"><input type="checkbox" id="aiAlpha"> Alpha matting — cleaner hair and fine edges (slower)</label>
+          <div class="grid3 mt8">
+            <div class="field"><label>Erode <span class="hint">(optional)</span></label><input type="number" id="aiErode" placeholder="10" min="0" step="1"></div>
+            <div class="field"><label>Foreground th.</label><input type="number" id="aiFg" placeholder="240" min="0" max="255"></div>
+            <div class="field"><label>Background th.</label><input type="number" id="aiBg" placeholder="10" min="0" max="255"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Step 3 &#183; Remove background</div>
+          <div class="row">
+            <button class="btn primary flex1" id="aiRun" disabled><span class="spin"></span>&#10024; Remove background</button>
+            <button class="btn flex1" id="aiPlace" disabled>&#10548; Put on timeline</button>
+          </div>
+          <div class="field mt8">
+            <label>Cut-out duration on the timeline <span class="hint">(seconds)</span></label>
+            <input type="number" id="aiDuration" value="5" min="0.2" step="0.5">
+          </div>
+          <div class="row mt8">
+            <span class="tag muted" id="aiOutTag">no cut-out yet</span>
+            <span class="flex1"></span>
+            <button class="btn sm" id="aiReveal">Open folder</button>
+          </div>
+          <div class="stat-line" id="aiRunNote">Output PNGs land in <b>Documents/SocialYantra/Cutouts</b>.</div>
+        </div>
+
+        <div class="acc" id="aiLogAcc">
+          <div class="acc-head">&#128221; rembg log<span class="chev">&#9660;</span></div>
+          <div class="acc-body">
+            <pre class="logbox" id="aiLog"></pre>
+            <button class="btn sm mt8" id="aiLogClear">Clear log</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= 11e. DOWNLOADER ======================= -->
+      <section class="view" id="view-mediaget">
+        <div class="demo-banner">DEMO MODE — running in a browser. Install the panel into Premiere Pro for live timeline control.</div>
+        <div class="hero">
+          <h1>Social Downloader</h1>
+          <p>Pull reference footage, B-roll and audio straight into the project with yt-dlp — YouTube, TikTok, Instagram, Pinterest and ~1800 other sites. Quality tiers, MP3 / M4A extraction, cookies for login-walled posts, exact frame rate and section downloads.</p>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <span class="tag muted" id="dlStatus">checking&#8230;</span>
+            <span class="tag muted" id="dlFfmpegTag">ffmpeg untested</span>
+            <span class="flex1"></span>
+            <button class="btn sm" id="dlCheck">Re-check</button>
+            <button class="btn sm primary" id="dlInstall">Install yt-dlp</button>
+          </div>
+          <div class="stat-line" id="dlStat">Detecting yt-dlp&#8230;</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Step 1 &#183; URL</div>
+          <div class="row">
+            <input type="text" id="dlUrl" placeholder="https://www.youtube.com/watch?v=&#8230;" style="flex:1">
+            <button class="btn sm" id="dlProbe">Probe</button>
+          </div>
+          <div class="row mt8" id="dlSites"></div>
+          <div class="stat-line" id="dlSiteNote">Paste a link — the site is detected automatically.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Step 2 &#183; Quality &amp; audio</div>
+          <div class="row" id="dlQuality"></div>
+          <div class="row mt8" id="dlAudio"></div>
+          <div class="grid2 mt8" id="dlFpsRow">
+            <div class="field">
+              <label>Exact FPS <span class="hint">(re-encode, blank = keep source)</span></label>
+              <input type="number" id="dlFps" placeholder="30" min="1" max="240" step="0.01">
+            </div>
+            <div class="field">
+              <label>Merging</label>
+              <label class="check" style="margin-top:6px"><input type="checkbox" id="dlMerge" checked> Merge with ffmpeg to MP4</label>
+            </div>
+          </div>
+          <label class="check mt8"><input type="checkbox" id="dlKeyframes" checked> Force keyframes at section cuts (frame-accurate, slower)</label>
+          <label class="check"><input type="checkbox" id="dlNoPlaylist" checked> Single video only (skip playlists)</label>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Step 3 &#183; Cookies <span class="hint">for members-only or login-walled posts</span></div>
+          <div class="row">
+            <input type="text" id="dlCookies" placeholder="cookies.txt exported from your browser (optional)" style="flex:1">
+            <button class="btn sm" id="dlCookiesBrowse">Choose&#8230;</button>
+          </div>
+          <div class="field mt8">
+            <label>Or read cookies straight from a browser</label>
+            <select id="dlBrowser">
+              <option value="">don't use browser cookies</option>
+              <option value="chrome">Chrome</option>
+              <option value="edge">Edge</option>
+              <option value="firefox">Firefox</option>
+              <option value="brave">Brave</option>
+              <option value="safari">Safari</option>
+              <option value="opera">Opera</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Step 4 &#183; Save location</div>
+          <div class="row">
+            <input type="text" id="dlDir" placeholder="download folder" style="flex:1" readonly>
+            <button class="btn sm" id="dlDirBrowse">Browse&#8230;</button>
+            <button class="btn sm" id="dlReveal">Open</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Download section <span class="hint">grab a range instead of the whole video</span></div>
+          <label class="check"><input type="checkbox" id="dlSectionOn"> Only download a section</label>
+          <div class="row mt8" id="dlSectionRow" style="display:none">
+            <input type="text" id="dlSecA" placeholder="from 00:01:30 or 90" style="flex:1">
+            <input type="text" id="dlSecB" placeholder="to 00:02:00 (blank = end)" style="flex:1">
+          </div>
+          <div class="stat-line">yt-dlp seeks with ffmpeg; without keyframe forcing the cut lands on the nearest I-frame.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-head">Step 5 &#183; Go</div>
+          <div class="row">
+            <button class="btn primary flex1" id="dlGo" disabled><span class="spin"></span>&#11015; Download</button>
+            <button class="btn danger" id="dlCancel" disabled>Cancel</button>
+          </div>
+          <div class="prog mt8" id="dlProg" style="display:none"><div></div></div>
+          <div class="list mt8" id="dlList" style="max-height:150px"><div class="empty">Nothing downloaded yet.</div></div>
+          <div class="row mt8">
+            <select id="dlImportMode" style="flex:1">
+              <option value="bin">Import into the Downloads bin</option>
+              <option value="playhead">Insert at the playhead</option>
+            </select>
+            <button class="btn sm" id="dlImport" disabled>Import into Premiere</button>
+          </div>
+        </div>
+
+        <div class="acc" id="dlLogAcc">
+          <div class="acc-head">&#128221; yt-dlp log<span class="chev">&#9660;</span></div>
+          <div class="acc-body">
+            <pre class="logbox" id="dlLog"></pre>
+            <button class="btn sm mt8" id="dlLogClear">Clear log</button>
           </div>
         </div>
       </section>
@@ -941,6 +1360,10 @@
 <script src="js/core/chapters.js"></script>
 <script src="js/core/whisper.js"></script>
 <script src="js/core/downloader.js"></script>
+<script src="js/core/stills.js"></script>
+<script src="js/core/frameqc.js"></script>
+<script src="js/core/rembg.js"></script>
+<script src="js/core/mediaget.js"></script>
 <script src="js/core/demo.js"></script>
 <script src="js/modules/silence.js"></script>
 <script src="js/modules/filler.js"></script>
@@ -953,6 +1376,11 @@
 <script src="js/modules/assets.js"></script>
 <script src="js/modules/truedup.js"></script>
 <script src="js/modules/tools.js"></script>
+<script src="js/modules/nesting.js"></script>
+<script src="js/modules/quickfx.js"></script>
+<script src="js/modules/layers.js"></script>
+<script src="js/modules/aiimage.js"></script>
+<script src="js/modules/mediaget.js"></script>
 <script src="js/modules/models.js"></script>
 <script src="js/modules/settings.js"></script>
 <script src="js/core/app.js"></script>

@@ -364,7 +364,10 @@ SY.insertAtPlayhead = function (arg) {
   try { ok = seq.overwriteClip(item, t, Math.max(seq.videoTracks.numTracks - 1, 0), Math.max(seq.audioTracks.numTracks - 1, 0)); } catch (e) { ok = false; }
   if (!ok) { try { ok = seq.overwriteClip(item, t); } catch (e2) { ok = false; } }
   if (!ok) { try { ok = seq.insertClip(item, t, -1, -1); } catch (e3) { ok = false; } }
-  return { ok: ok, item: item ? item.name : '' };
+  var name = item ? item.name : '';
+  /* every engine result carries `data` so panels read one shape; `item` stays
+   * as a flat alias for callers that predate the convention */
+  return { ok: ok, data: { item: name }, item: name };
 };
 
 SY.importMedia = function (path, binName) {

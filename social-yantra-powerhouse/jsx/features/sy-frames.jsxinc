@@ -1,0 +1,166 @@
+/* ==========================================================================
+ * Feature 16 — Frame-level tools: Paste Image · blank-span scan · Clear QC
+ *
+ * Pixel-level analysis (flash frames, empty frames) happens panel-side with
+ * ffmpeg (js/core/frameqc.js); this file owns everything that has to touch the
+ * timeline: stills on tracks, marker cleanup and the structural blank scan.
+ * ========================================================================== */
+
+/* Place an image (a paste, a freeze frame, a keyed cut-out) on the timeline.
+ * arg: { path, durationSec, track, binName, mode:'overwrite'|'insert', at } */
+SY.pasteImage = function (arg) {
+  var seq = SY.getSeq();
+  if (!arg || !arg.path) { return { ok: false, error: 'No image path given.' }; }
+  var f = new File(arg.path);
+  if (!f.exists) { return { ok: false, error: 'Image not found: ' + arg.path }; }
+
+  var item = SY.importMedia(arg.path, arg.binName || 'Social Yantra');
+  if (!item) { return { ok: false, error: 'Premiere could not import ' + arg.path }; }
+
+  var at = (arg.at !== undefined && arg.at !== null) ? +arg.at : SY.playerSeconds(seq);
+  var dur = (arg.durationSec && +arg.durationSec > 0) ? +arg.durationSec : 5;
+  var numV = 0;
+  try { numV = seq.videoTracks.numTracks; } catch (e) { numV = 1; }
+  var track = (arg.track !== undefined && arg.track !== null && arg.track >= 0) ? arg.track : Math.max(0, numV - 1);
+  SY.ensureVideoTrackCount(seq, track + 1);
+
+  var t = SY.seconds(at);
+  var ok = false;
+  try {
+    ok = (arg.mode === 'insert')
+      ? seq.insertClip(item, t, track, -1)
+      : seq.overwriteClip(item, t, track, -1);
+  } catch (e1) { ok = false; }
+  if (!ok) { try { ok = seq.overwriteClip(item, t); } catch (e2) { ok = false; } }
+  if (!ok) { return { ok: false, error: 'Could not place "' + item.name + '" on the timeline.' }; }
+
+  /* stills import at Premiere's default still length — force the asked-for one */
+  var vt = seq.videoTracks[track];
+  var trimmed = false;
+  for (var i = 0; vt && i < SY.colCount(vt.clips); i++) {
+    var c = SY.clipAt(vt, i);
+    if (!c) { continue; }
+    if (Math.abs(SY.t2s(c.start) - at) < SY.frameDur(seq) * 0.25 && c.name === item.name) {
+      try { c.outPoint = SY.seconds(SY.t2s(c.inPoint) + dur); trimmed = true; } catch (e3) {}
+      try { c.end = SY.seconds(at + dur); } catch (e4) {}
+      break;
+    }
+  }
+  return { ok: true, data: { name: item.name, at: at, duration: dur, track: track, trimmed: trimmed } };
+};
+
+/* Freeze frame at the playhead → PNG → straight back onto the timeline.
+ * This is Freeze Frame + Paste Image in one gesture. */
+SY.freezeToTimeline = function (arg) {
+  arg = arg || {};
+  var seq = SY.getSeq();
+  var dir = arg.folder || (Folder.myDocuments.fsName + '/SocialYantra/Freeze');
+  SY.ensureFolder(dir);
+  var pos = SY.playerSeconds(seq);
+  var tc = SY.tcOf(seq, pos).replace(/:/g, '-');
+  var path = dir + '/Freeze_' + seq.name.replace(/[\\/:*?"<>|]/g, '_') + '_' + tc + '_' + new Date().getTime() + '.png';
+  var got = SY.captureFrame(path);
+  if (!got) { return { ok: false, error: 'Frame capture failed on this build (all QE tiers).' }; }
+  var res = SY.pasteImage({
+    path: path, durationSec: arg.durationSec || 2, track: arg.track,
+    binName: 'Social Yantra', mode: arg.mode || 'overwrite', at: pos
+  });
+  if (!res.ok) { return { ok: false, error: res.error, data: { path: path } }; }
+  res.data.path = path;
+  return res;
+};
+
+/* Structural blank scan: every hole on every video track, plus the head and
+ * tail of the sequence. Pixel-level empties come from ffmpeg blackdetect. */
+SY.blankScan = function (arg) {
+  var seq = SY.getSeq();
+  var fd = SY.frameDur(seq);
+  var dur = SY.seqDuration(seq);
+  var minDur = (arg && arg.minDur) ? +arg.minDur : fd * 0.9;
+  var out = [];
+
+  for (var i = 0; i < seq.videoTracks.numTracks; i++) {
+    var vt = seq.videoTracks[i];
+    var prevEnd = 0;
+    var rows = [];
+    for (var j = 0; j < SY.colCount(vt.clips); j++) {
+      var c = SY.clipAt(vt, j);
+      if (!c) { continue; }
+      rows.push({ start: SY.t2s(c.start), end: SY.t2s(c.end), name: c.name });
+    }
+    rows.sort(function (a, b) { return a.start - b.start; });
+    for (var k = 0; k < rows.length; k++) {
+      var gap = rows[k].start - prevEnd;
+      if (gap > minDur) {
+        out.push({ kind: 'blank', track: i, at: prevEnd, until: rows[k].start, dur: gap,
+          text: 'V' + (i + 1) + ': hole ' + prevEnd.toFixed(2) + 's–' + rows[k].start.toFixed(2) + 's (' + gap.toFixed(2) + 's)' });
+      }
+      if (rows[k].end > prevEnd) { prevEnd = rows[k].end; }
+    }
+    if (dur - prevEnd > minDur) {
+      out.push({ kind: 'blank', track: i, at: prevEnd, until: dur, dur: dur - prevEnd,
+        text: 'V' + (i + 1) + ': nothing after ' + prevEnd.toFixed(2) + 's (' + (dur - prevEnd).toFixed(2) + 's)' });
+    }
+  }
+  out.sort(function (a, b) { return a.at - b.at; });
+  return { ok: true, data: { holes: out, duration: dur, fps: SY.fpsOf(seq) } };
+};
+
+/* Clear QC: drop every marker the panel stamped (and optionally all markers). */
+SY.qcClear = function (arg) {
+  var seq = SY.getSeq();
+  var prefix = (arg && arg.prefix !== undefined) ? String(arg.prefix) : 'QC';
+  var all = !!(arg && arg.all);
+  var col = null;
+  try { col = seq.markers; } catch (e) { return { ok: false, error: 'This sequence has no marker collection.' }; }
+  if (!col) { return { ok: false, error: 'This sequence has no marker collection.' }; }
+
+  var victims = [];
+  var guard = 0;
+  try {
+    for (var m = col.getFirstMarker(); m !== undefined && m !== null && guard++ < 5000; m = col.getNextMarker(m)) {
+      var nm = '';
+      try { nm = String(m.name || ''); } catch (e1) {}
+      var cm = '';
+      try { cm = String(m.comments || ''); } catch (e2) {}
+      var hit = all || nm.indexOf(prefix) === 0 || cm.indexOf('QC:') === 0 || /^QC[ _-]/i.test(nm);
+      if (hit) { victims.push(m); }
+    }
+  } catch (e3) { return { ok: false, error: 'Could not walk the markers: ' + e3.message }; }
+
+  var removed = 0, failed = 0;
+  for (var v = 0; v < victims.length; v++) {
+    var ok = false;
+    try { victims[v].delete(); ok = true; } catch (e4) {
+      try { col.deleteMarker(victims[v]); ok = true; } catch (e5) {}
+    }
+    if (ok) { removed++; } else { failed++; }
+  }
+  return { ok: true, data: { removed: removed, failed: failed, all: all, prefix: prefix } };
+};
+
+/* Move the playhead (used by the QC lists). */
+SY.jumpTo = function (arg) {
+  var s = (arg && arg.seconds !== undefined && arg.seconds !== null) ? +arg.seconds : 0;
+  var ok = SY.setPlayer(s);
+  return { ok: ok, data: { at: s } };
+};
+
+/* Capture the frame under the playhead to an explicit path (AI Image input). */
+SY.captureFrameTo = function (arg) {
+  var seq = SY.getSeq();
+  if (!arg || !arg.path) { return { ok: false, error: 'No destination path.' }; }
+  SY.ensureFolder(String(arg.path).replace(/[\\/][^\\/]*$/, ''));
+  var got = SY.captureFrame(arg.path);
+  if (!got) { return { ok: false, error: 'All QE frame-capture tiers failed on this build.' }; }
+  var f = new File(arg.path);
+  var name = '';
+  try {
+    var clips = SY.getClips({ selectedOnly: true }).data || [];
+    var pos = SY.playerSeconds(seq);
+    for (var i = 0; i < clips.length; i++) {
+      if (clips[i].trackType === 'video' && pos >= clips[i].start && pos <= clips[i].end) { name = clips[i].name; break; }
+    }
+  } catch (e) {}
+  return { ok: true, data: { path: arg.path, at: SY.playerSeconds(seq), size: f.exists ? f.length : 0, name: name } };
+};

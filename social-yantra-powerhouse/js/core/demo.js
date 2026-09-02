@@ -69,6 +69,67 @@
         out.data = { video: '', thumb: '/demo/thumb.png', projectCopy: '', meta: '/demo/meta.json', exportMethod: 'demo', warnings: ['demo: AME not running'] };
       } else if (/SY\.evalJson\("nestRestore"/.test(script)) {
         out.data = { placedAt: '7.200s', item: 'DEMO_NEST' };
+
+      /* ---- nesting (Nest / Unnest / Nest Separate) ---- */
+      } else if (/SY\.evalJson\("nestSelection"|"nestSeparate"/.test(script)) {
+        var sep = /nestSeparate/.test(script);
+        out.data = {
+          name: 'DEMO_NEST', sequenceId: 'demo-nest', clipsIn: 2, kept: 2, dropped: 5,
+          span: { start: 12.5, end: 20.0 }, duration: 7.5, replaced: !sep, lifted: 2,
+          placedAt: 12.5, track: 0, trimmed: true, shiftFails: 0,
+          note: '2 clip(s) now live inside "DEMO_NEST".'
+        };
+        if (sep) { out.data.note = 'Lifted 2 clip(s) into "DEMO_NEST" — the parent timeline keeps the gap.'; }
+      } else if (/SY\.evalJson\("unnestSelection"/.test(script)) {
+        out.data = { placed: 3, nests: 1, skipped: 0, tracks: { video: 3, audio: 4 },
+          details: ['"NEST_A" → 3 clip(s) at 12.50s'] };
+      } else if (/SY\.evalJson\("nestListSequences"/.test(script)) {
+        out.data = [
+          { name: 'DEMO — Podcast_Ep12', id: 'demo', clips: 9, duration: 41.5 },
+          { name: 'INTRO_NEST', id: 'demo-2', clips: 4, duration: 7.5 }
+        ];
+
+      /* ---- quick effects ---- */
+      } else if (/SY\.evalJson\("listEffects"/.test(script)) {
+        out.data = {
+          video: ['Basic 3D', 'Black & White', 'Corner Pin', 'Crop', 'Directional Blur', 'Drop Shadow',
+            'Gaussian Blur', 'Lumetri Color', 'Ultra Key', 'Warp Stabilizer'],
+          audio: ['Dynamics', 'Parametric Equalizer', 'DeNoise'], source: 'qe'
+        };
+      } else if (/SY\.evalJson\("applyEffect"/.test(script)) {
+        out.data = { applied: 2, clips: 2, effects: 1, unknown: [], propNotes: [], failed: [] };
+      } else if (/SY\.evalJson\("listClipEffects"/.test(script)) {
+        out.data = [{ name: 'interview_A.mp4', start: 0, track: 0, trackType: 'video',
+          effects: ['Opacity', 'Gaussian Blur'] }];
+
+      /* ---- frames / layers / QC ---- */
+      } else if (/SY\.evalJson\("pasteImage"/.test(script)) {
+        out.data = { name: 'paste_1.png', at: 7.2, duration: 5, track: 2, trimmed: true };
+      } else if (/SY\.evalJson\("freezeToTimeline"/.test(script)) {
+        out.data = { name: 'Freeze_demo.png', at: 7.2, duration: 2, track: 2, trimmed: true,
+          path: '/Users/demo/Documents/SocialYantra/Freeze/Freeze_demo.png' };
+      } else if (/SY\.evalJson\("captureFrameTo"/.test(script)) {
+        out.data = { path: '/demo/captures/ai/clipframe.png', at: 7.2, size: 184320, name: 'interview_A.mp4' };
+      } else if (/SY\.evalJson\("blankScan"/.test(script)) {
+        out.data = { holes: [{ kind: 'blank', track: 0, at: 20.0, until: 21.3, dur: 1.3,
+          text: 'V1: hole 20.00s–21.30s (1.30s)' }], duration: 41.5, fps: 25 };
+      } else if (/SY\.evalJson\("qcClear"/.test(script)) {
+        out.data = { removed: 3, failed: 0, all: false, prefix: 'QC' };
+      } else if (/SY\.evalJson\("jumpTo"/.test(script)) {
+        out.data = { at: 7.2 };
+      } else if (/SY\.evalJson\("addStillLayer"/.test(script)) {
+        out.data = { name: 'text.png', at: 0, duration: 12.5, track: 2, trimmed: true,
+          span: { start: 0, end: 12.5 }, mode: 'span', track: 2 };
+      } else if (/SY\.evalJson\("moveLayerTrack"/.test(script)) {
+        out.data = { moved: 1, dir: 1, amount: 1, fallback: 0, blocked: [], tracks: 3 };
+      } else if (/SY\.evalJson\("layerStack"/.test(script)) {
+        out.data = {
+          tracks: [
+            { index: 0, label: 'V1', clips: 4, locked: false, hidden: false },
+            { index: 1, label: 'V2', clips: 2, locked: false, hidden: false },
+            { index: 2, label: 'V3', clips: 0, locked: false, hidden: false }
+          ], numVideo: 3, numAudio: 4
+        };
       } else if (/SY\.evalJson\("getAudioTracks"/.test(script)) {
         out.data = {
           tracks: [
@@ -173,5 +234,71 @@
   // Demo downloader: no network, but keep the UI flow explorable
   window.SYDownloader && (window.SYDownloader.checkDir = function (dir, cb) {
     cb({ ok: true, dir: dir, created: false, writable: true, freeBytes: 0, models: 2 });
+  });
+
+  // Demo rembg: pretend the CLI is there and hand back a plausible cut-out
+  window.SYRembg && (window.SYRembg.detect = function (cb) {
+    setTimeout(function () {
+      cb({ ok: true, bin: 'rembg', args: [], label: 'demo', version: '2.0.60 (demo)' });
+    }, 300);
+  });
+  window.SYRembg && (window.SYRembg.hasModel = function (id) { return id === 'u2net'; });
+  window.SYRembg && (window.SYRembg.modelDir = function () { return '~/.u2net'; });
+  window.SYRembg && (window.SYRembg.run = function (opts, cb, onLog) {
+    onLog && onLog('$ rembg i -m ' + opts.model + ' ' + opts.input + ' ' + opts.output);
+    setTimeout(function () {
+      onLog && onLog('Downloading u2net.onnx … done');
+      onLog && onLog('Processing … done');
+      cb(new Error('Demo mode — install the panel into Premiere to run rembg for real'));
+    }, 1200);
+  });
+
+  // Demo yt-dlp: show the flow, never touch the network
+  window.SYMediaGet && (window.SYMediaGet.detect = function (cb) {
+    setTimeout(function () {
+      cb({ ok: true, bin: 'yt-dlp', args: [], label: 'demo', version: '2026.09.03 (demo)' });
+    }, 300);
+  });
+  window.SYMediaGet && (window.SYMediaGet.probe = function (url, cb) {
+    setTimeout(function () {
+      cb(null, {
+        title: 'DEMO — How to colour grade in 60 seconds', uploader: 'Demo Channel',
+        duration: 187, max_height: 2160, fps: 30, ext: 'mp4', id: 'demo123',
+        chapters: [{ start: 0, end: 60, title: 'Intro' }, { start: 60, end: 187, title: 'Grade' }],
+        site: window.SYMediaGet.siteFor(url).id
+      });
+    }, 700);
+  });
+  window.SYMediaGet && (window.SYMediaGet.run = function (opts, hooks, cb) {
+    var args = window.SYMediaGet.buildArgs(opts);
+    hooks.onLog && hooks.onLog('$ yt-dlp ' + window.SYMediaGet.quote(args).join(' '));
+    var pct = 0;
+    var iv = setInterval(function () {
+      pct += 12;
+      hooks.onProgress && hooks.onProgress({ pct: Math.min(99, pct), size: '18.42MiB', speed: '3.21MiB/s', eta: '00:04' });
+      if (pct >= 99) {
+        clearInterval(iv);
+        hooks.onStage && hooks.onStage({ kind: 'postprocess', stage: 'Merger', detail: 'Merging formats', path: '~/Documents/SocialYantra/Downloads/demo.mp4' });
+        cb(new Error('Demo mode — install the panel into Premiere to download for real'));
+      }
+    }, 220);
+  });
+  window.SYMediaGet && (window.SYMediaGet.newestFiles = function (dir, since, cb) { cb([]); });
+
+  // Demo stills: no ffmpeg, so fail with a clear message instead of throwing
+  window.SYStills && (window.SYStills.makeSolid = function (opts, cb) {
+    setTimeout(function () { cb(new Error('Demo mode — solid rendering needs the installed panel + ffmpeg')); }, 400);
+  });
+  window.SYStills && (window.SYStills.makeText = function (opts, cb) {
+    setTimeout(function () { cb(new Error('Demo mode — text rendering needs the installed panel + ffmpeg')); }, 400);
+  });
+  window.SYStills && (window.SYStills.pasteClipboard = function (p, cb) {
+    setTimeout(function () { cb({ ok: false, error: 'Demo mode — clipboard paste needs the installed panel' }); }, 300);
+  });
+  window.SYStills && (window.SYStills.tempPath = function (sub, name) {
+    return '~/Documents/SocialYantra/Captures/' + (sub || '') + '/' + (name || 'still') + '_' + Date.now() + '.png';
+  });
+  window.SYFrameQC && (window.SYFrameQC.scanClips = function (clips, opts, cb) {
+    setTimeout(function () { cb(new Error('Demo mode has no ffmpeg — install the panel to analyse real pixels')); }, 500);
   });
 })(window.SY);

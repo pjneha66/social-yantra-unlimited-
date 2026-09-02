@@ -63,7 +63,8 @@ window.SYUI = (function (SY) {
 
     // module inits
     ['SilenceMod', 'FillerMod', 'ChaptersMod', 'DuckMod', 'BeatMod', 'FlowMod', 'WordPopMod',
-     'NestMod', 'AssetsMod', 'TrueDupMod', 'ToolsMod', 'ModelsMod', 'SettingsMod'].forEach(function (name) {
+     'NestMod', 'AssetsMod', 'TrueDupMod', 'ToolsMod', 'NestSeqMod', 'QuickFxMod', 'LayersMod',
+     'AIImageMod', 'MediaGetMod', 'ModelsMod', 'SettingsMod'].forEach(function (name) {
       if (window[name] && typeof window[name].init === 'function') {
         try { window[name].init(); } catch (e) { SY.log(name + ' init failed: ' + e.message, 'err'); }
       }
@@ -94,6 +95,11 @@ window.SYUI = (function (SY) {
     if (view === 'duck' && window.DuckMod) { DuckMod.refresh(); }
     if (view === 'beat' && window.BeatMod) { BeatMod.refresh(); }
     if (view === 'chapters' && window.ChaptersMod) { ChaptersMod.refresh(); }
+    if (view === 'tools' && window.NestSeqMod) { NestSeqMod.refresh(); }
+    if (view === 'quickfx' && window.QuickFxMod) { QuickFxMod.refresh(false); }
+    if (view === 'layers' && window.LayersMod) { LayersMod.refresh(); }
+    if (view === 'aiimage' && window.AIImageMod) { AIImageMod.refresh(); }
+    if (view === 'mediaget' && window.MediaGetMod) { MediaGetMod.refresh(); }
     SY.settings.nav.lastView = view;
     try { SY.saveSettings(); } catch (e) { /* noop */ }
   }
