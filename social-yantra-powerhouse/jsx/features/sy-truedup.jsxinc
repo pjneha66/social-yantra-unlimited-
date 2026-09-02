@@ -1,0 +1,115 @@
+/* ==========================================================================
+ * Feature 7 — True Dup: fully isolated nest clones with unique sequence IDs,
+ * replacing timeline clips in place (bypasses Premiere's native limitation).
+ * ========================================================================== */
+
+SY.allSequenceIds = function () {
+  var ids = {};
+  try {
+    for (var i = 0; i < app.project.sequences.numSequences; i++) { ids[app.project.sequences[i].sequenceID] = true; }
+  } catch (e) {}
+  return ids;
+};
+
+SY.sequenceForItem = function (projItem) {
+  try {
+    for (var i = 0; i < app.project.sequences.numSequences; i++) {
+      var s = app.project.sequences[i];
+      if (s.projectItem && s.projectItem.nodeId === projItem.nodeId) { return s; }
+    }
+  } catch (e) {}
+  return null;
+};
+
+SY.trueDup = function (arg) {
+  // arg: { suffix, all }
+  var seq = SY.getSeq();
+  var fd = SY.frameDur(seq);
+  var snapshot = SY.getClips({ selectedOnly: true });
+  var sel = snapshot.data || [];
+  var nestClips = [];
+  for (var i = 0; i < sel.length; i++) {
+    if (sel[i].trackType === 'video' && sel[i].isSequenceItem) { nestClips.push(sel[i]); }
+    if (!arg || arg.all === false) { if (nestClips.length) { break; } }
+  }
+  if (!nestClips.length) {
+    return { ok: false, error: 'Select clip(s) that point to a nested sequence first.' };
+  }
+
+  var beforeIds = SY.allSequenceIds();
+  var results = [];
+  var processed = 0;
+
+  for (var n = 0; n < nestClips.length; n++) {
+    var meta = nestClips[n];
+    // find live TrackItem
+    var clip = null;
+    var vt = seq.videoTracks[meta.trackIndex];
+    for (var j = 0; j < SY.colCount(vt.clips); j++) {
+      var c = SY.clipAt(vt, j);
+      if (Math.abs(SY.t2s(c.start) - meta.start) < fd * 0.25 && c.name === meta.name) { clip = c; break; }
+    }
+    if (!clip) { results.push('skip (moved): ' + meta.name); continue; }
+
+    var origItem = clip.projectItem;
+    if (!origItem) { results.push('skip (no item): ' + meta.name); continue; }
+    var origSeq = SY.sequenceForItem(origItem);
+    if (!origSeq) { results.push('skip (not a sequence): ' + meta.name); continue; }
+
+    var st = SY.t2s(clip.start), en = SY.t2s(clip.end), ip = SY.t2s(clip.inPoint), op = SY.t2s(clip.outPoint);
+
+    /* 1) clone the sequence (unique sequenceID) */
+    var newItem = null;
+    try {
+      var clone = origSeq.clone();
+      if (clone) {
+        var newName = origSeq.name + (arg && arg.suffix ? arg.suffix : '_CLONE');
+        try { clone.name = newName; } catch (eName) {}
+        // locate its project item
+        var found = null;
+        try {
+          for (var q = 0; q < app.project.sequences.numSequences; q++) {
+            var sq = app.project.sequences[q];
+            if (sq.sequenceID === clone.sequenceID && sq.projectItem) { found = sq.projectItem; break; }
+            if (!beforeIds[sq.sequenceID] && sq.projectItem && !found) { found = sq.projectItem; }
+          }
+        } catch (eFind) {}
+        newItem = found || clone.projectItem;
+      }
+    } catch (eClone) {}
+    if (!newItem) {
+      try { newItem = origItem.duplicate(); } catch (eDup) { newItem = null; }
+    }
+    if (!newItem) { results.push('clone failed: ' + meta.name); continue; }
+
+    /* 2) replace the timeline clip in place */
+    var removed = false;
+    try { clip.remove(false, false); removed = true; } catch (eR) {
+      try { clip.remove(false); removed = true; } catch (eR2) { removed = false; }
+    }
+    if (!removed) { results.push('replace failed (could not lift original): ' + meta.name); continue; }
+
+    var placed = false;
+    try { placed = seq.overwriteClip(newItem, st, meta.trackIndex, Math.min(meta.trackIndex, seq.audioTracks.numTracks - 1)); } catch (eO) { placed = false; }
+    if (!placed) { try { placed = seq.overwriteClip(newItem, st); } catch (eO2) { placed = false; } }
+    if (!placed) { results.push('re-place failed: ' + meta.name); continue; }
+
+    /* 3) restore exact timing (tick-accurate) */
+    var newClip = null;
+    var vt2 = seq.videoTracks[meta.trackIndex];
+    for (var k = 0; k < SY.colCount(vt2.clips); k++) {
+      var cc = SY.clipAt(vt2, k);
+      if (Math.abs(SY.t2s(cc.start) - st) < fd * 0.25) { newClip = cc; break; }
+    }
+    if (newClip) {
+      try { newClip.inPoint = SY.seconds(ip); } catch (eIP) {}
+      try { newClip.outPoint = SY.seconds(op); } catch (eOP) {}
+      try { newClip.end = SY.seconds(en); } catch (eEN) {}
+    }
+    results.push('cloned: ' + (newItem.name || meta.name));
+    processed++;
+  }
+
+  return { ok: processed > 0, data: { clones: processed, details: results },
+    error: processed ? undefined : 'No nests cloned. ' + results.join(' | ') };
+};

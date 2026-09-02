@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExportRecipe Version="1.0" Caps="8ef4a018-7f2c-4345-8d95-4b2b0f1d9c0d">
+	<!-- Social Yantra Powerhouse — Apple ProRes 422 HQ (QuickTime .mov)
+	     Bundled default for Nest Saver. If your AME build rejects this
+	     recipe, the panel automatically reports it and keeps the backup
+	     bundle (thumbnail + .prproj) intact. -->
+	<ExportPath UseCompFolder="false"></ExportPath>
+	<ExportFileName>SY_Nest</ExportFileName>
+	<ExportRange>0</ExportRange>
+	<IsMultiFile>false</IsMultiFile>
+	<OriginalFlag>false</OriginalFlag>
+	<Format>
+		<ID>baa8f6b6-ea0f-4bb9-8a1f-5d3cd0d3f6a3</ID>
+		<Name>QuickTime</Name>
+		<Extension>mov</Extension>
+		<Codec>
+			<ID>6a66157c-ea0f-4bb9-8a1f-5d3cd0d3f6a3</ID>
+			<Name>Apple ProRes 422 HQ</Name>
+			<SpecificFormat></SpecificFormat>
+			<MaxBitDepth>3</MaxBitDepth>
+			<Rec601Luma>false</Rec601Luma>
+			<Rec601Chroma>false</Rec601Chroma>
+			<VideoInfo>
+				<FrameSize>
+					<Width>0</Width>
+					<Height>0</Height>
+					<FrameRate>0</FrameRate>
+				</FrameSize>
+				<PixelAspectRatio>0</PixelAspectRatio>
+				<FieldType>0</FieldType>
+			</VideoInfo>
+		</Codec>
+		<AudioCodec>
+			<ID>d20c4b2c-ea0f-4bb9-8a1f-5d3cd0d3f6a3</ID>
+			<Name>Uncompressed</Name>
+			<Channels>2</Channels>
+			<SampleRate>48000</SampleRate>
+			<SampleSize>16</SampleSize>
+		</AudioCodec>
+		<Filters></Filters>
+		<Summary>Apple ProRes 422 HQ · 48kHz 16-bit stereo</Summary>
+	</Format>
+</ExportRecipe>

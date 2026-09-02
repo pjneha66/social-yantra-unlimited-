@@ -1,0 +1,39 @@
+/* ==========================================================================
+ * Feature 4 — Word-Pop Captions & Subtitles (native caption lanes)
+ * The panel generates caption cues (word groups + hold logic capped at 0.8s),
+ * writes an .srt, and this module injects it into a NATIVE Premiere caption
+ * track via Sequence.createCaptionTrack().
+ * ========================================================================== */
+
+SY.createCaptionTrackFromSrt = function (arg) {
+  // arg: { srtPath, offsetSeconds }
+  var seq = SY.getSeq();
+  if (!arg || !arg.srtPath) { return { ok: false, error: 'No SRT path.' }; }
+  var f = new File(arg.srtPath);
+  if (!f.exists) { return { ok: false, error: 'SRT file not found: ' + arg.srtPath }; }
+
+  var item = SY.importMedia(arg.srtPath, 'Social Yantra Captions');
+  if (!item) { return { ok: false, error: 'Premiere could not import the SRT (unsupported version?).' }; }
+
+  var offset = (arg.offsetSeconds || 0);
+  var ok = false, used = '';
+  var formats = [];
+  try { if (Sequence.CAPTION_FORMAT_SUBTITLE !== undefined) { formats.push(Sequence.CAPTION_FORMAT_SUBTITLE); } } catch (e) {}
+  var attempts = [];
+  attempts.push(function () { return seq.createCaptionTrack(item, offset, formats.length ? formats[0] : 0); });
+  attempts.push(function () { return seq.createCaptionTrack(item, offset); });
+  attempts.push(function () { return seq.createCaptionTrack(item); });
+  for (var i = 0; i < attempts.length && !ok; i++) {
+    try { ok = attempts[i](); used = 'attempt ' + (i + 1); } catch (e) { ok = false; }
+  }
+  if (!ok) {
+    return { ok: false, error: 'Caption track creation failed — requires Premiere Pro 24.x or newer. The SRT is imported into the project; drag it onto a caption track manually.' };
+  }
+  return { ok: true, data: { note: 'Native caption track created (' + used + ')' } };
+};
+
+/* Simple probe so the panel can show caption capability. */
+SY.hasCaptionAPI = function () {
+  try { return { ok: true, data: { createCaptionTrack: typeof SY.getSeq().createCaptionTrack === 'function' } }; }
+  catch (e) { return { ok: false, error: String(e) }; }
+};

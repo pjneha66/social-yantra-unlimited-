@@ -1,0 +1,211 @@
+/* ==========================================================================
+ * Feature 3 — Interactive Graph Editor 2.0 (Flow tab): curve baking
+ * Premiere's ExtendScript has no bezier keyframe handle API, so curves are
+ * sampled by the panel, greedy-fit reduced, then baked as dense-but-minimal
+ * keyframe polylines. Anti-overshoot guards spatial properties.
+ * ========================================================================== */
+
+SY.collectionLen = function (col) {
+  if (!col) { return 0; }
+  if (typeof col.length === 'number') { return col.length; }
+  if (typeof col.numItems === 'number') { return col.numItems; }
+  if (typeof col.count === 'function') { try { return col.count(); } catch (e) {} }
+  return 0;
+};
+
+SY.getComponent = function (clip, compName) {
+  try {
+    var comps = clip.components;
+    var n = SY.collectionLen(comps);
+    for (var i = 0; i < n; i++) {
+      var c = comps[i];
+      if (c && c.displayName === compName) { return c; }
+    }
+  } catch (e) {}
+  return null;
+};
+
+SY.getParam = function (clip, compName, paramName) {
+  var comp = SY.getComponent(clip, compName);
+  if (!comp) { return null; }
+  try {
+    var props = comp.properties;
+    var n = SY.collectionLen(props);
+    for (var i = 0; i < n; i++) {
+      var p = props[i];
+      if (p && (p.displayName === paramName || p.name === paramName)) { return p; }
+    }
+  } catch (e) {}
+  return null;
+};
+
+SY.PARAM_MAP = {
+  'Scale': ['Motion', 'Scale'],
+  'Position': ['Motion', 'Position'],
+  'Anchor Point': ['Motion', 'Anchor Point'],
+  'Rotation': ['Motion', 'Rotation'],
+  'Opacity': ['Opacity', 'Opacity']
+};
+SY.SPATIAL = { 'Position': true, 'Anchor Point': true };
+
+/* Prepare a param for keyframing; clear existing keys in range. */
+SY.prepParam = function (param, t0, t1) {
+  try { param.setTimeVarying(true, true); } catch (e) { try { param.setTimeVarying(true); } catch (e2) {} }
+  try { param.removeKeyRange(SY.seconds(t0), SY.seconds(t1)); } catch (e) {}
+  return true;
+};
+
+SY.writeKey = function (param, timeSec, value) {
+  var t = SY.seconds(timeSec);
+  var attempts = [[value, t], [value, timeSec]];
+  for (var i = 0; i < attempts.length; i++) {
+    try { param.setValueAtTime(attempts[i][0], attempts[i][1]); return true; } catch (e) {}
+  }
+  return false;
+};
+
+/*
+ * arg: {
+ *   prop: 'Scale'|'Position'|'Anchor Point'|'Rotation'|'Opacity',
+ *   range: 'clip'|'work'|'custom',
+ *   from, to            — scalar values (non-spatial)
+ *   fromXY:[x,y], toXY:[x,y] — absolute values (spatial)
+ *   keys: [{p:0..1, v:0..1}] — greedy-fit points (v = eased fraction)
+ *   antiOvershoot: bool (values are pre-clamped panel-side; this is the guard)
+ * }
+ */
+SY.bakeCurve = function (arg) {
+  var seq = SY.getSeq();
+  var map = SY.PARAM_MAP[arg.prop];
+  if (!map) { return { ok: false, error: 'Unknown property: ' + arg.prop }; }
+  var spatial = !!SY.SPATIAL[arg.prop];
+  var clips = [];
+  var i, j;
+
+  var snapshot = SY.getClips({ selectedOnly: true });
+  var sel = snapshot.data || [];
+  if (!sel.length) { return { ok: false, error: 'Select one or more clips in the timeline first.' }; }
+  var selVideo = [];
+  for (i = 0; i < sel.length; i++) { if (sel[i].trackType === 'video') { selVideo.push(sel[i]); } }
+  if (!selVideo.length) { return { ok: false, error: 'No video clips selected.' }; }
+
+  var fd = SY.frameDur(seq);
+  var t0Global = 1e12, t1Global = 0;
+  var report = [];
+
+  for (i = 0; i < seq.videoTracks.numTracks; i++) {
+    var vt = seq.videoTracks[i];
+    if (SY.trackLocked(vt)) { continue; }
+    for (j = 0; j < SY.colCount(vt.clips); j++) {
+      var clip = SY.clipAt(vt, j);
+      var ci = SY.clipInfo(clip, 'video', i);
+      var match = false;
+      for (var s = 0; s < selVideo.length; s++) {
+        if (selVideo[s].trackIndex === i && Math.abs(selVideo[s].start - ci.start) < fd * 0.25 &&
+            selVideo[s].name === ci.name) { match = true; break; }
+      }
+      if (!match) { continue; }
+      var param = SY.getParam(clip, map[0], map[1]);
+      if (!param) { report.push('no param ' + arg.prop + ' on "' + ci.name + '"'); continue; }
+
+      var t0, t1;
+      if (arg.range === 'clip') { t0 = ci.start; t1 = ci.end; }
+      else if (arg.range === 'work') {
+        try { t0 = parseFloat(seq.getWorkAreaInPoint()); t1 = parseFloat(seq.getWorkAreaOutPoint()); }
+        catch (e) { t0 = 0; t1 = SY.ticksToSeconds(seq.end); }
+      } else {
+        t0 = (arg.customStart !== undefined) ? arg.customStart : ci.start;
+        t1 = (arg.customEnd !== undefined) ? arg.customEnd : t0 + (arg.duration || 1);
+      }
+      var dur = Math.max(t1 - t0, fd);
+      SY.prepParam(param, t0, t1);
+
+      var written = 0, failed = 0;
+      var baseVal = null, baseRead = false;
+      var fx, tx, fy, ty;
+      if (spatial && arg.fromXY && arg.toXY) {
+        fx = arg.fromXY[0]; tx = arg.toXY[0]; fy = arg.fromXY[1]; ty = arg.toXY[1];
+        if (arg.spatialOffset) {
+          try { var cur = param.getValue(); if (cur && cur.length >= 2) { baseVal = [cur[0], cur[1]]; } } catch (eG) { baseVal = null; }
+          if (baseVal) { fx += baseVal[0]; tx += baseVal[0]; fy += baseVal[1]; ty += baseVal[1]; }
+        }
+        if (arg.antiOvershoot) {
+          // keep spatial targets inside the frame so nothing flies off-screen
+          var Wf = seq.frameSizeHorizontal, Hf = seq.frameSizeVertical;
+          fx = Math.max(0, Math.min(Wf, fx)); tx = Math.max(0, Math.min(Wf, tx));
+          fy = Math.max(0, Math.min(Hf, fy)); ty = Math.max(0, Math.min(Hf, ty));
+        }
+        baseRead = true;
+      }
+      for (var k = 0; k < arg.keys.length; k++) {
+        var kk = arg.keys[k];
+        var timeSec = t0 + kk.p * dur;
+        var value;
+        if (spatial && baseRead) {
+          value = [fx + (tx - fx) * kk.v, fy + (ty - fy) * kk.v];
+        } else {
+          value = arg.from + (arg.to - arg.from) * kk.v;
+        }
+        if (SY.writeKey(param, timeSec, value)) { written++; } else { failed++; }
+      }
+      // boundary holds so the value sticks past the range
+      var endV;
+      if (spatial && baseRead) {
+        var lastV2 = arg.keys.length ? arg.keys[arg.keys.length - 1].v : 1;
+        endV = [fx + (tx - fx) * lastV2, fy + (ty - fy) * lastV2];
+      } else {
+        endV = arg.keys.length ? arg.from + (arg.to - arg.from) * arg.keys[arg.keys.length - 1].v : arg.to;
+      }
+      SY.writeKey(param, t1, endV);
+      report.push('"' + ci.name + '": ' + written + ' keys' + (failed ? ' (' + failed + ' failed)' : ''));
+      if (t0 < t0Global) { t0Global = t0; }
+      if (t1 > t1Global) { t1Global = t1; }
+    }
+  }
+  var note = spatial && arg.antiOvershoot
+    ? 'Anti-overshoot: values clamped to the from→to envelope (no flying off-screen).'
+    : '';
+  return { ok: true, data: { clips: report, note: note } };
+};
+
+/* Feature 4 helper — bake a word-pop (scale snap + opacity) onto a selected clip. */
+SY.bakeWordPop = function (arg) {
+  // arg: { words:[{start,end}], popScale:number, dur:number }
+  var seq = SY.getSeq();
+  var pop = (arg.popScale && arg.popScale > 100) ? arg.popScale : 115;
+  var rampIn = (arg.dur !== undefined) ? arg.dur : 0.09;
+  var snapshot = SY.getClips({ selectedOnly: true });
+  var sel = snapshot.data || [];
+  var done = 0;
+  for (var i = 0; i < seq.videoTracks.numTracks; i++) {
+    var vt = seq.videoTracks[i];
+    for (var j = 0; j < SY.colCount(vt.clips); j++) {
+      var clip = SY.clipAt(vt, j);
+      var ci = SY.clipInfo(clip, 'video', i);
+      var match = false;
+      for (var s = 0; s < sel.length; s++) {
+        if (sel[s].trackType === 'video' && sel[s].trackIndex === i && Math.abs(sel[s].start - ci.start) < SY.frameDur(seq) * 0.25) { match = true; break; }
+      }
+      if (!match) { continue; }
+      var scale = SY.getParam(clip, 'Motion', 'Scale');
+      var opac = SY.getParam(clip, 'Opacity', 'Opacity');
+      var t0 = ci.start, t1 = ci.end;
+      if (scale) {
+        SY.prepParam(scale, t0, t1);
+        SY.writeKey(scale, t0, 100);
+        for (var w = 0; w < arg.words.length; w++) {
+          var ws = arg.words[w].start;
+          if (ws <= t0 || ws >= t1) { continue; }
+          SY.writeKey(scale, ws, pop);
+          SY.writeKey(scale, Math.min(ws + rampIn, t1), 100);
+        }
+      }
+      if (opac) {
+        SY.prepParam(opac, t0, t1);
+        SY.writeKey(opac, t0, 100);
+      }
+      done++;
+    }
+  }
+  return { ok: done > 0, data: { clipsPopped: done }, error: done ? undefined : 'No selected video clip.' };
+};

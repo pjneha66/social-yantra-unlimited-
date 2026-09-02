@@ -1,0 +1,250 @@
+/* ==========================================================================
+ * Feature 8 — Dedicated Timeline Shortcut Tools
+ * Smart adjustment layers · Staircase stagger · Freeze frame export · QC scan
+ * ========================================================================== */
+
+/* ---------- Smart Adjustment Layers (template adopt + duplicate trick) ---------- */
+SY.adjFindTemplate = function (arg) {
+  var name = (arg && arg.name) || '';
+  var found = null;
+  function walk(collection) {
+    if (found) { return; }
+    for (var i = 0; i < collection.numItems; i++) {
+      var it = collection[i];
+      if (found) { return; }
+      var isSeq = false;
+      try { isSeq = it.isSequence && it.isSequence(); } catch (e) { isSeq = false; }
+      if (!isSeq && (it.name === name || /adjust(ment)?\s*layer/i.test(it.name))) { found = it; return; }
+      if (it.type === ProjectItemType.BIN && it.children) { walk(it.children); }
+    }
+  }
+  try { walk(app.project.rootItem.children); } catch (e) {}
+  return { ok: true, data: { found: !!found, name: found ? found.name : '' } };
+};
+
+SY.dupItem = function (item) {
+  try { var d = item.duplicate(); if (d) { return d; } } catch (e) {}
+  try {
+    var t0 = SY.seconds(0), t1 = SY.seconds(3600);
+    var sub = item.createSubClip(item.name + ' SY', t0, t1, true, true, true);
+    if (sub) { return sub; }
+  } catch (e2) {}
+  return item;
+};
+
+SY.ensureVideoTrackCount = function (seq, want) {
+  var guard = 0;
+  while (seq.videoTracks.numTracks < want && guard++ < 8) {
+    try { SY.getQeSeq().addVideoTrack(); } catch (e) { break; }
+  }
+  return seq.videoTracks.numTracks;
+};
+
+SY.adjAdd = function (arg) {
+  // arg: { mode:'perClip'|'span', templateName }
+  var seq = SY.getSeq();
+  var fd = SY.frameDur(seq);
+  var tplInfo = SY.adjFindTemplate({ name: arg.templateName || '' });
+  if (!tplInfo.data.found) {
+    return { ok: false, error: 'No "Adjustment Layer" template found. In Premiere: File > New > Adjustment Layer (once), then press "Adopt template" here.' };
+  }
+  var tpl = SY.findItemByName(tplInfo.data.name);
+  if (!tpl) { return { ok: false, error: 'Template item vanished.' }; }
+
+  var snapshot = SY.getClips({ selectedOnly: true });
+  var sel = snapshot.data || [];
+  var selVideo = [];
+  for (var i = 0; i < sel.length; i++) { if (sel[i].trackType === 'video') { selVideo.push(sel[i]); } }
+  if (!selVideo.length) { return { ok: false, error: 'Select clip(s) in the timeline first.' }; }
+  selVideo.sort(function (a, b) { return a.start - b.start; });
+
+  var jobs = [];
+  if (arg.mode === 'span') {
+    var st = selVideo[0].start, en = selVideo[0].end;
+    for (var s2 = 1; s2 < selVideo.length; s2++) {
+      if (selVideo[s2].start < st) { st = selVideo[s2].start; }
+      if (selVideo[s2].end > en) { en = selVideo[s2].end; }
+    }
+    var maxTrack = 0;
+    for (var s3 = 0; s3 < selVideo.length; s3++) { if (selVideo[s3].trackIndex > maxTrack) { maxTrack = selVideo[s3].trackIndex; } }
+    jobs.push({ start: st, end: en, track: maxTrack + 1 });
+  } else {
+    for (var s4 = 0; s4 < selVideo.length; s4++) {
+      jobs.push({ start: selVideo[s4].start, end: selVideo[s4].end, track: selVideo[s4].trackIndex + 1 });
+    }
+  }
+
+  var placed = 0, errors = [];
+  for (var j = 0; j < jobs.length; j++) {
+    var job = jobs[j];
+    SY.ensureVideoTrackCount(seq, job.track + 1);
+    var dup = SY.dupItem(tpl);
+    var ok = false;
+    try { ok = seq.insertClip(dup, SY.seconds(job.start), job.track, -1); } catch (e1) {
+      try { ok = seq.overwriteClip(dup, job.start, job.track, -1); } catch (e2) { ok = false; }
+    }
+    if (!ok) { try { ok = seq.overwriteClip(dup, job.start); } catch (e3) { ok = false; } }
+    if (!ok) { errors.push('insert failed @' + job.start.toFixed(2)); continue; }
+    // trim the adjustment layer to the job span
+    var vt = seq.videoTracks[job.track];
+    for (var k = 0; k < SY.colCount(vt.clips); k++) {
+      var c = SY.clipAt(vt, k);
+      if (Math.abs(SY.t2s(c.start) - job.start) < fd * 0.25) {
+        try { c.end = SY.seconds(job.end); } catch (e4) {}
+        placed++;
+        break;
+      }
+    }
+  }
+  return { ok: placed > 0, data: { placed: placed, mode: arg.mode }, error: placed ? undefined : errors.join('; ') };
+};
+
+/* ---------- Staircase Stagger ---------- */
+SY.getSelectionRefs = function () {
+  var seq = SY.getSeq();
+  var refs = [];
+  for (var i = 0; i < seq.videoTracks.numTracks; i++) {
+    var vt = seq.videoTracks[i];
+    for (var j = 0; j < SY.colCount(vt.clips); j++) {
+      var c = SY.clipAt(vt, j);
+      try { if (c.isSelected()) { refs.push({ clip: c, trackIndex: i }); } } catch (e) {}
+    }
+  }
+  refs.sort(function (a, b) { return SY.t2s(a.clip.start) - SY.t2s(b.clip.start); });
+  return refs;
+};
+
+SY.staircase = function (arg) {
+  // arg: { dir: 1|-1, frames:n, trackShift:k }
+  var seq = SY.getSeq();
+  var refs = SY.getSelectionRefs();
+  if (refs.length < 2) { return { ok: false, error: 'Select at least 2 clips to stagger.' }; }
+  var fd = SY.frameDur(seq);
+  var step = arg.frames * fd * (arg.dir >= 0 ? 1 : -1);
+  var moved = 0, trackFails = 0;
+  var qeSeq = SY.getQeSeq();
+
+  for (var i = 0; i < refs.length; i++) {
+    var offset = step * i;
+    var c = refs[i].clip;
+    var ns = SY.t2s(c.start) + offset, ne = SY.t2s(c.end) + offset;
+    var okMove = false;
+    try { c.end = SY.seconds(ne); c.start = SY.seconds(ns); okMove = true; } catch (e1) {
+      try { c.start = SY.seconds(ns); c.end = SY.seconds(ne); okMove = true; } catch (e2) { okMove = false; }
+    }
+    if (!okMove) { continue; }
+    moved++;
+
+    if (arg.trackShift > 0) {
+      var want = refs[i].trackIndex + arg.trackShift * (i + 1) * (arg.dir >= 0 ? 1 : -1);
+      SY.ensureVideoTrackCount(seq, want + 1);
+      // QE ladder for cross-track moves
+      var qeTrack = null;
+      try { qeTrack = qeSeq.getVideoTrackAt(refs[i].trackIndex); } catch (eT) {}
+      var qeClip = null;
+      if (qeTrack) {
+        for (var q = 0; q < qeTrack.numItems; q++) {
+          var it = qeTrack.getItemAt(q);
+          if (it && it.type !== 'Empty' && Math.abs(SY.t2s(it.start) - ns) < fd * 0.5) { qeClip = it; break; }
+        }
+      }
+      var shifted = false;
+      if (qeClip) {
+        var names = ['moveToTrack', 'setTrack'];
+        for (var nm = 0; nm < names.length && !shifted; nm++) {
+          try { qeClip[names[nm]](want); shifted = true; } catch (eM) {}
+        }
+      }
+      if (!shifted) { trackFails++; }
+    }
+  }
+  var note = trackFails ? (trackFails + ' clips kept their track (this Premiere build lacks QE cross-track moves) — time stagger applied.' ) : '';
+  return { ok: moved > 0, data: { moved: moved, note: note } };
+};
+
+/* ---------- Freeze Frame Export ---------- */
+SY.freezeFrame = function (arg) {
+  // arg: { folder } (defaults Documents/SocialYantra/Freeze)
+  var seq = SY.getSeq();
+  var dir = (arg && arg.folder) || (Folder.myDocuments.fsName + '/SocialYantra/Freeze');
+  SY.ensureFolder(dir);
+  var pos = SY.playerSeconds(seq);
+  var tc = SY.tcOf(seq, pos).replace(/:/g, '-');
+  var stamp = new Date().getTime();
+  var path = dir + '/Freeze_' + seq.name.replace(/[\\\/:*?"<>|]/g, '_') + '_' + tc + '_' + stamp + '.png';
+  var got = SY.captureFrame(path);
+  if (!got) { return { ok: false, error: 'All QE frame-capture tiers failed on this build.' }; }
+  return { ok: true, data: { path: path } };
+};
+
+/* ---------- Timeline QC Checker ---------- */
+SY.qcScan = function (arg) {
+  // arg: { gaps, offline, silence, markers }
+  var seq = SY.getSeq();
+  var fd = SY.frameDur(seq);
+  var issues = [];
+
+  if (arg.gaps) {
+    for (var i = 0; i < seq.videoTracks.numTracks; i++) {
+      var vt = seq.videoTracks[i];
+      var prevEnd = -1;
+      for (var j = 0; j < SY.colCount(vt.clips); j++) {
+        var c = SY.clipAt(vt, j);
+        var cs = SY.t2s(c.start), ce = SY.t2s(c.end);
+        if (prevEnd >= 0 && cs - prevEnd > fd * 0.9) {
+          issues.push({ kind: 'blank', severity: 'warn', at: prevEnd, until: cs, text: 'V' + (i + 1) + ': blank frames ' + prevEnd.toFixed(2) + 's–' + cs.toFixed(2) + 's' });
+        }
+        prevEnd = ce;
+      }
+    }
+  }
+
+  if (arg.offline) {
+    for (var v = 0; v < seq.videoTracks.numTracks; v++) {
+      for (var k = 0; k < SY.colCount(seq.videoTracks[v].clips); k++) {
+        var vc = SY.clipInfo(SY.clipAt2(seq.videoTracks[v].clips, k), 'video', v);
+        if (vc.offline && !vc.isSequenceItem && !vc.isAdjustment) {
+          issues.push({ kind: 'offline', severity: 'err', at: vc.start, until: vc.end, text: 'OFFLINE media: "' + vc.name + '" @' + vc.start.toFixed(2) + 's' });
+        }
+      }
+    }
+    for (var a = 0; a < seq.audioTracks.numTracks; a++) {
+      for (var m = 0; m < SY.colCount(seq.audioTracks[a].clips); m++) {
+        var ac = SY.clipInfo(SY.clipAt2(seq.audioTracks[a].clips, m), 'audio', a);
+        if (ac.offline) {
+          issues.push({ kind: 'offline', severity: 'err', at: ac.start, until: ac.end, text: 'OFFLINE audio: "' + ac.name + '" @' + ac.start.toFixed(2) + 's' });
+        }
+      }
+    }
+  }
+
+  if (arg.silence) {
+    // coverage gaps on audio tracks = guaranteed silence (waveform-level scan
+    // available in the Silence Cutter tab)
+    for (var t = 0; t < seq.audioTracks.numTracks; t++) {
+      var at = seq.audioTracks[t];
+      var prevEnd2 = 0;
+      for (var u = 0; u < SY.colCount(at.clips); u++) {
+        var ac2 = SY.clipAt(at, u);
+        var s2 = SY.t2s(ac2.start);
+        if (s2 - prevEnd2 > 0.5) {
+          issues.push({ kind: 'silence', severity: 'warn', at: prevEnd2, until: s2, text: 'A' + (t + 1) + ': no audio ' + prevEnd2.toFixed(2) + 's–' + s2.toFixed(2) + 's' });
+        }
+        prevEnd2 = SY.t2s(ac2.end);
+      }
+    }
+  }
+
+  issues.sort(function (x, y) { return x.at - y.at; });
+
+  if (arg.markers) {
+    for (var q = 0; q < issues.length; q++) {
+      try {
+        var type = issues[q].kind === 'offline' ? 'Comment' : (issues[q].kind === 'blank' ? 'Chapter' : 'Segment');
+        SY.addMarker(issues[q].at, 'QC: ' + issues[q].kind.toUpperCase(), issues[q].text, type);
+      } catch (eMk) {}
+    }
+  }
+
+  return { ok: true, data: { issues: issues, scanned: { v: seq.videoTracks.numTracks, a: seq.audioTracks.numTracks } } };
+};

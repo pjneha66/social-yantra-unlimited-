@@ -1,0 +1,5 @@
+{
+  "name": "SY Jelly Drop",
+  "model": "bounce",
+  "params": { "bounces": 5 }
+}

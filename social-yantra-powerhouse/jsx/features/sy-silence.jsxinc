@@ -1,0 +1,64 @@
+/* ==========================================================================
+ * Feature 1 & 2 — timeline side of AI Silence Cut + Filler Cleanup
+ * Audio waveform analysis runs in the panel (Node VAD engine); this module
+ * exposes timeline topology, frame-snapping and the ripple-cut execution.
+ * ========================================================================== */
+
+/* Timeline topology for the VAD engine (audio clips w/ media paths). */
+SY.getAudioTopology = function () {
+  var r = SY.getClips({ selectedOnly: false });
+  var clips = r.data || [];
+  var audio = [];
+  for (var i = 0; i < clips.length; i++) {
+    var c = clips[i];
+    if (c.trackType === 'audio' && c.mediaPath) {
+      audio.push({ mediaPath: c.mediaPath, start: c.start, end: c.end, inPoint: c.inPoint,
+        trackIndex: c.trackIndex, name: c.name });
+    }
+  }
+  // selection info for filler workflow
+  var sel = [];
+  for (var j = 0; j < clips.length; j++) {
+    if (clips[j].selected) { sel.push(clips[j]); }
+  }
+  var seq = SY.getSeq();
+  return {
+    audioClips: audio,
+    selection: sel,
+    seq: { name: seq.name, fps: SY.fpsOf(seq), duration: SY.ticksToSeconds(seq.end) },
+    playerPosition: SY.playerSeconds(seq)
+  };
+};
+
+/* Frame-snap candidate cuts + drop overlaps. cuts: [{start,end}] seconds */
+SY.snapCuts = function (arg) {
+  var seq = SY.getSeq();
+  var fd = SY.frameDur(seq);
+  var cuts = (arg && arg.cuts) || [];
+  var minCut = (arg && arg.minCut) || 0;
+  var snapped = [];
+  for (var i = 0; i < cuts.length; i++) {
+    var s = Math.round(cuts[i].start / fd) * fd;
+    var e = Math.round(cuts[i].end / fd) * fd;
+    if (e - s >= minCut) { snapped.push({ start: s, end: e }); }
+  }
+  snapped.sort(function (a, b) { return a.start - b.start; });
+  var merged = [];
+  for (var k = 0; k < snapped.length; k++) {
+    if (merged.length && snapped[k].start <= merged[merged.length - 1].end + fd * 0.25) {
+      merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, snapped[k].end);
+    } else { merged.push(snapped[k]); }
+  }
+  return { ok: true, data: merged, fps: SY.fpsOf(seq), frameDur: fd };
+};
+
+/* Execute cuts — shared by Silence Cutter & Filler Remover (frame-accurate
+ * razor boundaries + non-overlapping ripple deletion with A/V realign). */
+SY.executeCuts = function (arg) {
+  // arg: { cuts:[{start,end}], mode, previewOnly, markerPrefix }
+  if (!arg || !arg.cuts || !arg.cuts.length) { return { ok: false, error: 'No cuts supplied.' }; }
+  var seq = SY.getSeq();
+  var fd = SY.frameDur(seq);
+  var r = SY.snapCuts({ cuts: arg.cuts, minCut: fd });
+  return SY.applyCuts({ cuts: r.data, mode: arg.mode, previewOnly: arg.previewOnly, markerPrefix: arg.markerPrefix });
+};

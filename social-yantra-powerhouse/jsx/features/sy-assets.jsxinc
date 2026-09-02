@@ -1,0 +1,37 @@
+/* ==========================================================================
+ * Feature 6 — Responsive Local Assets Library: import & timeline insertion
+ * ========================================================================== */
+
+SY.assetImport = function (arg) {
+  // arg: { paths:[..], binName }
+  var bin = null;
+  if (arg.binName) { bin = SY.findOrCreateBin(arg.binName); }
+  var ok = false;
+  try { ok = app.project.importFiles(arg.paths, true, bin, false); } catch (e) {
+    try { ok = app.project.importFiles(arg.paths, true); } catch (e2) { ok = false; }
+  }
+  return { ok: ok, imported: arg.paths.length };
+};
+
+SY.assetInsertAtPlayhead = function (arg) {
+  // arg: { path }
+  return SY.insertAtPlayhead({ path: arg.path, binName: 'Social Yantra' });
+};
+
+SY.mogrtToTimeline = function (arg) {
+  // arg: { path }
+  var seq = SY.getSeq();
+  var ticks = String(Math.round(SY.playerSeconds(seq) * SY.TICKS));
+  var ok = false;
+  try { ok = seq.importMGT(arg.path, ticks, 0, 0); } catch (e) {
+    try { ok = seq.importMGT(arg.path, ticks, 0, -1); } catch (e2) { ok = false; }
+  }
+  if (!ok) { return { ok: false, error: 'MOGRT placement failed.' }; }
+  return { ok: true };
+};
+
+SY.createBin = function (arg) {
+  // arg: { name }
+  var b = SY.findOrCreateBin(arg.name);
+  return { ok: !!b, name: b ? b.name : '' };
+};
